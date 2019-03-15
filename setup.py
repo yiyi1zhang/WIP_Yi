@@ -28,5 +28,6 @@ if sys.argv[-1] == 'test':
           install_requires=['openapi-codec', 'json', 'pickle', 'subprocess', 'sys', 'os', 'h5py', 'keras', 'matplotlib',
                             'pandas', 'scipy', 'tensorflow', 'yaml', 'PyQt5', 'numbers', 'copy', 'numpy', 'pandas',
                             'argparse', 'hyperopt', 'hyperopt', 'hashlib', 'math', 'dicom', 'pydicom', 'dicom-numpy',
-                            'collections', 'pyqtgraph', 'python-csv', 'gtabview'])
+                            'collections', 'pyqtgraph', 'python-csv', 'gtabview' , 'pyqtdeploy', 'nibabel', 'Pillow',
+                            'xtract'])
     sys.exit()
