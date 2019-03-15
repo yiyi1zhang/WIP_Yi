@@ -8,7 +8,6 @@ from PyQt5.QtCore import QTimer, pyqtSignal
 from PyQt5.QtGui import QPainter, QBrush, QPen, QColor, QPalette
 from PyQt5.QtWidgets import QWidget, QSizePolicy
 
-matplotlib.use("Qt5Agg")
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 import numpy as np

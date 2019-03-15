@@ -148,10 +148,6 @@ class LabelTable(QTableView):
             self.df.to_csv(self.labelfile, index=False)
             self.statusChanged.emit(False)
 
-    def get_selectedItem(self):
-        return self.selectedItem
-
-
 class MyTableModel(QAbstractTableModel):
     """
     keep the method names

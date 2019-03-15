@@ -1,5 +1,9 @@
 <RCC>
   <qresource prefix="icons">
+    <file>../Icons/image.png</file>
+    <file>../Icons/results.png</file>
+    <file>../Icons/info.png</file>
+    <file>../Icons/label.png</file>
     <file>../Icons/Hatching.png</file>
     <file>../Icons/cancel.png</file>
     <file>../Icons/done.png</file>

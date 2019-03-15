@@ -587,6 +587,44 @@
          </item>
         </layout>
        </widget>
+       <widget class="QWidget" name="page_4">
+        <widget class="QWidget" name="gridLayoutWidget">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>251</width>
+           <height>411</height>
+          </rect>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_4" columnstretch="0,0">
+          <property name="sizeConstraint">
+           <enum>QLayout::SetMinAndMaxSize</enum>
+          </property>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_classes">
+            <property name="text">
+             <string>TextLabel</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QRadioButton" name="radioButton">
+            <property name="text">
+             <string>default</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QRadioButton" name="radioButton_2">
+            <property name="text">
+             <string>DIY</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </widget>
       </widget>
      </item>
     </layout>

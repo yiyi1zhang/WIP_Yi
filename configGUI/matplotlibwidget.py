@@ -3,7 +3,6 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
-matplotlib.use("Qt5Agg")
 from PyQt5 import QtCore
 from PyQt5.QtCore import pyqtSlot,QStringListModel,pyqtSignal
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QSizePolicy, QWidget, QListView,QMessageBox,QFileDialog,QDialog,QPushButton

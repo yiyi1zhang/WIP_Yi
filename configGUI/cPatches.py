@@ -2,11 +2,11 @@
 
 # Form implementation generated from reading ui file 'cPatches.ui'
 #
-# Created by: PyQt5 UI code generator 5.6
+# Created by: PyQt5 UI code generator 5.11.3
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtGui, QtWidgets
 
 class Ui_Patches(object):
     def setupUi(self, Patches):
@@ -38,7 +38,6 @@ class Ui_Patches(object):
         self.page = QtWidgets.QWidget()
         self.page.setObjectName("page")
         self.verticalLayout_4 = QtWidgets.QVBoxLayout(self.page)
-        self.verticalLayout_4.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout_4.setObjectName("verticalLayout_4")
         self.gridLayout_3 = QtWidgets.QGridLayout()
         self.gridLayout_3.setObjectName("gridLayout_3")
@@ -108,7 +107,6 @@ class Ui_Patches(object):
         self.page_2 = QtWidgets.QWidget()
         self.page_2.setObjectName("page_2")
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.page_2)
-        self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.ggglayout = QtWidgets.QGridLayout()
         self.ggglayout.setObjectName("ggglayout")
@@ -187,7 +185,6 @@ class Ui_Patches(object):
         self.page_3 = QtWidgets.QWidget()
         self.page_3.setObjectName("page_3")
         self.verticalLayout_3 = QtWidgets.QVBoxLayout(self.page_3)
-        self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout_3.setObjectName("verticalLayout_3")
         self.gridLayout_2 = QtWidgets.QGridLayout()
         self.gridLayout_2.setObjectName("gridLayout_2")
@@ -284,6 +281,25 @@ class Ui_Patches(object):
         self.gridLayout_2.addWidget(self.label_18, 12, 1, 1, 1)
         self.verticalLayout_3.addLayout(self.gridLayout_2)
         self.stackedWidget.addWidget(self.page_3)
+        self.page_4 = QtWidgets.QWidget()
+        self.page_4.setObjectName("page_4")
+        self.gridLayoutWidget = QtWidgets.QWidget(self.page_4)
+        self.gridLayoutWidget.setGeometry(QtCore.QRect(0, 0, 251, 411))
+        self.gridLayoutWidget.setObjectName("gridLayoutWidget")
+        self.gridLayout_4 = QtWidgets.QGridLayout(self.gridLayoutWidget)
+        self.gridLayout_4.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
+        self.gridLayout_4.setContentsMargins(0, 0, 0, 0)
+        self.gridLayout_4.setObjectName("gridLayout_4")
+        self.label_classes = QtWidgets.QLabel(self.gridLayoutWidget)
+        self.label_classes.setObjectName("label_classes")
+        self.gridLayout_4.addWidget(self.label_classes, 0, 0, 1, 1)
+        self.radioButton = QtWidgets.QRadioButton(self.gridLayoutWidget)
+        self.radioButton.setObjectName("radioButton")
+        self.gridLayout_4.addWidget(self.radioButton, 1, 0, 1, 1)
+        self.radioButton_2 = QtWidgets.QRadioButton(self.gridLayoutWidget)
+        self.radioButton_2.setObjectName("radioButton_2")
+        self.gridLayout_4.addWidget(self.radioButton_2, 2, 0, 1, 1)
+        self.stackedWidget.addWidget(self.page_4)
         self.gridLayout.addWidget(self.stackedWidget, 1, 1, 1, 1)
         self.verticalLayout.addLayout(self.gridLayout)
         self.buttonBox = QtWidgets.QDialogButtonBox(Patches)
@@ -356,4 +372,17 @@ class Ui_Patches(object):
         self.label_12.setText(_translate("Patches", "movement"))
         self.label_22.setText(_translate("Patches", "both"))
         self.label_8.setText(_translate("Patches", "t1 liver"))
+        self.label_classes.setText(_translate("Patches", "TextLabel"))
+        self.radioButton.setText(_translate("Patches", "default"))
+        self.radioButton_2.setText(_translate("Patches", "DIY"))
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    Patches = QtWidgets.QDialog()
+    ui = Ui_Patches()
+    ui.setupUi(Patches)
+    Patches.show()
+    sys.exit(app.exec_())
 
