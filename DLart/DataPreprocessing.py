@@ -2,11 +2,13 @@ import numpy as np
 import dicom
 import dicom_numpy
 import os
-
+import shelve
+import cProfile
 import json
 from matplotlib import path
 
-from DLart.RigidPatching import fRigidPatching_maskLabeling, fRigidPatching3D_maskLabeling
+from DLart.RigidPatching import fRigidPatching, fRigidPatching3D
+
 
 def fPreprocessData(Path_Markings, mrt_Folder,proband, model, patchSize, patchOverlap, ratio_labeling, dimension):
 
@@ -20,10 +22,10 @@ def fPreprocessData(Path_Markings, mrt_Folder,proband, model, patchSize, patchOv
 
     # RigidPatching
     if dimension == '2D':
-        dPatches, dLabel, nbPatches = fRigidPatching_maskLabeling(scale_dicom_numpy_array, patchSize, patchOverlap, mask_numpy_array,
+        dPatches, dLabel, nbPatches = fRigidPatching(scale_dicom_numpy_array, patchSize, patchOverlap, mask_numpy_array,
                                                      ratio_labeling)
     else:
-        dPatches, dLabel, nbPatches = fRigidPatching3D_maskLabeling(scale_dicom_numpy_array, patchSize, patchOverlap, mask_numpy_array,
+        dPatches, dLabel, nbPatches = fRigidPatching3D(scale_dicom_numpy_array, patchSize, patchOverlap, mask_numpy_array,
                                                      ratio_labeling)
 
     return dPatches, dLabel, nbPatches
@@ -108,38 +110,48 @@ def create_MASK_Array(pathMarking, proband, model, mrt_height, mrt_width, mrt_de
     with open(pathMarking, 'r') as fp:
         loadMark = json.load(fp)
 
-    #load_mark = shelve.open(Path_mark + proband + ".dumbdbm.slv")
+    #loadMark = shelve.open(Path_mark + proband + ".dumbdbm.slv")
 
-    if model in loadMark:
-        marks = loadMark[model]
-        for key in marks:
-            num = int(key.find("_"))
-            img_no = int(key[0:num])
-            key2 = key[num + 1:len(key)]
-            num = int(key2.find("_"))
-            str_no = key2[0:num]
-            tool_no = int(str_no[0])
-            art_no = int(str_no[1])
+    if model in loadMark['layer']:
+        dataset_marks = loadMark['layer'][model]
+        names = loadMark['names']['list']
+        for key in dataset_marks:
+
+            img_no = int(key[0:2])-1
+            tool_no = int(key[2])
+            artifact_num = int(key[3])
+            artifact_str = names[artifact_num]
+            artifact_region_num = int(key[4:6])
+
+            if artifact_str == "motion":
+                artifact_num = 1
+            elif artifact_str == "shim":
+                artifact_num = 2
+            else:
+                # no known artifact
+                artifact_num = -1
+
             #print(mask[:, :, img_no].shape)
-            mask_lay = mask[:, :, img_no]
-            p = marks[key]
+            #mask_lay = mask[:, :, img_no]
+            mask_lay = np.zeros((mrt_height, mrt_width))
+            p = dataset_marks[key]
             if tool_no == 1:
                 # p has to be an ndarray
                 p = np.asarray(p['points'])
-                mask_lay = mask_rectangle(p[0], p[1], p[2], p[3], mask_lay, art_no)
+                mask_lay = mask_rectangle(p[0], p[1], p[2], p[3], mask_lay, artifact_num)
             elif tool_no == 2:
                 # p has to be an ndarray
                 p = np.asarray(p['points'])
-                mask_lay = mask_ellipse(p[0], p[1], p[2], p[3], mask_lay, art_no)
+                mask_lay = mask_ellipse(p[0], p[1], p[2], p[3], mask_lay, artifact_num)
             elif tool_no == 3:
                 # p has to be a matplotlib path
                 p = path.Path(np.asarray(p['vertices']), p['codes'])
-                mask_lay = mask_lasso(p, mask_lay, art_no)
-            mask[:, :, img_no] = mask_lay
+                mask_lay = mask_lasso(p, mask_lay, artifact_num)
+            mask[:, :, img_no] = mask[:,:,img_no] + mask_lay
     else:
         pass
 
-    #load_mark.close()  # used for shelve
+    #loadMark.close()  # used for shelve
     #print(mask.dtype)
 
     return mask

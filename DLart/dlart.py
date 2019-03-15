@@ -1,115 +1,75 @@
-'''
-@author: Yannick Wilhelm
-@email: yannick.wilhelm@gmx.de
-@date: January 2018
-'''
-
-import sys
-#sys.path.append("C:/Users/Yannick/'Google Drive'/30_Content/CNNArt/utils")
-import scipy.io as sio
-#from RigidPatching import *
-#from DataPreprocessing import *
-import os
-#from Dataset import Dataset
-
-import tensorflow as tf
-import numpy as np
-import dicom as dicom
-import dicom_numpy as dicom_np
-import json
 import datetime
-import h5py
-
-
-from DLart.DataPreprocessing import fPreprocessData, create_MASK_Array
-from DLart.Dataset import Dataset
-from DLart.RigidPatching import fRigidPatching_patchLabeling, fRigidPatching_maskLabeling, fRigidPatching3D_maskLabeling
-from configGUI import cnn_main
-from configGUI.Unpatch import UnpatchType
-from utils import Label, scaling
-from utils.Training_Test_Split import fSplitDataset, fSplitSegmentationDataset
-from utils.Unpatching import *
-
 from collections import Counter
 
-# ArtGAN
-#from ArtGAN import artGAN_main as artGAN
+from DLart.DataPreprocessing import create_MASK_Array
+from DLart.Dataset import Dataset
+import numpy as np
+import h5py
+import os
+import json
+import dicom
+import dicom_numpy as dicom_np
+import tensorflow as tf
+import scipy.io as sio
 
+from DLart.RigidPatching import fRigidPatching_maskLabeling, fRigidPatching_patchLabeling, fRigidPatching3D_maskLabeling
+from config.PATH import PATH_OUT, LEARNING_OUT
+from utils.CNN_main import fRunCNN, RUN_CNN_TRAIN_TEST_VALIDATION, RUN_CNN_TRAIN_TEST
+from utils.label import Label
+from utils.Multiclass_Unpatching import UnpatchType, UnpatchArte
+from utils.Prediction import predict_segmentation_model, predict_model
+from utils.Training_Test_Split import fSplitSegmentationDataset, fSplitDataset
+from utils.Unpatching import fUnpatchSegmentation, fMulticlassUnpatch2D, fUnpatch3D
+from DLart.Constants_DLart import *
 
 
 class DeepLearningArtApp():
     datasets = {
-        't1_tse_tra_Kopf_0002': Dataset('t1_tse_tra_Kopf_0002', None,'ref', 'head', 't1'),
-        't1_tse_tra_Kopf_Motion_0003': Dataset('t1_tse_tra_Kopf_Motion_0003', None, 'motion','head', 't1'),
-        't1_tse_tra_fs_mbh_Leber_0004': Dataset('t1_tse_tra_fs_mbh_Leber_0004',None,'ref','abdomen', 't1'),
-        't1_tse_tra_fs_mbh_Leber_Motion_0005': Dataset('t1_tse_tra_fs_mbh_Leber_Motion_0005', None, 'motion', 'abdomen', 't1'),
-        't2_tse_tra_fs_navi_Leber_0006': Dataset('t2_tse_tra_fs_navi_Leber_0006',None,'ref','abdomen', 't2'),
-        't2_tse_tra_fs_navi_Leber_Shim_xz_0007': Dataset('t2_tse_tra_fs_navi_Leber_Shim_xz_0007', None, 'shim', 'abdomen', 't2'),
-        't1_tse_tra_fs_Becken_0008': Dataset('t1_tse_tra_fs_Becken_0008', None, 'ref', 'pelvis', 't1'),
-        't2_tse_tra_fs_Becken_0009': Dataset('t2_tse_tra_fs_Becken_0009', None, 'ref', 'pelvis', 't2'),
-        't1_tse_tra_fs_Becken_Motion_0010': Dataset('t1_tse_tra_fs_Becken_Motion_0010', None, 'motion', 'pelvis', 't1'),
-        't2_tse_tra_fs_Becken_Motion_0011': Dataset('t2_tse_tra_fs_Becken_Motion_0011', None, 'motion', 'pelvis', 't2'),
-        't2_tse_tra_fs_Becken_Shim_xz_0012': Dataset('t2_tse_tra_fs_Becken_Shim_xz_0012', None, 'shim', 'pelvis', 't2')
+        't1_tse_tra_Kopf_0002': Dataset( 't1_tse_tra_Kopf_0002', None, 'ref', 'head', 't1' ),
+        't1_tse_tra_Kopf_Motion_0003': Dataset( 't1_tse_tra_Kopf_Motion_0003', None, 'motion', 'head', 't1' ),
+        't1_tse_tra_fs_mbh_Leber_0004': Dataset( 't1_tse_tra_fs_mbh_Leber_0004', None, 'ref', 'abdomen', 't1' ),
+        't1_tse_tra_fs_mbh_Leber_Motion_0005': Dataset( 't1_tse_tra_fs_mbh_Leber_Motion_0005', None, 'motion',
+                                                        'abdomen', 't1' ),
+        't2_tse_tra_fs_navi_Leber_0006': Dataset( 't2_tse_tra_fs_navi_Leber_0006', None, 'ref', 'abdomen', 't2' ),
+        't2_tse_tra_fs_navi_Leber_Shim_xz_0007': Dataset( 't2_tse_tra_fs_navi_Leber_Shim_xz_0007', None, 'shim',
+                                                          'abdomen', 't2' ),
+        't1_tse_tra_fs_Becken_0008': Dataset( 't1_tse_tra_fs_Becken_0008', None, 'ref', 'pelvis', 't1' ),
+        't2_tse_tra_fs_Becken_0009': Dataset( 't2_tse_tra_fs_Becken_0009', None, 'ref', 'pelvis', 't2' ),
+        't1_tse_tra_fs_Becken_Motion_0010': Dataset( 't1_tse_tra_fs_Becken_Motion_0010', None, 'motion', 'pelvis',
+                                                     't1' ),
+        't2_tse_tra_fs_Becken_Motion_0011': Dataset( 't2_tse_tra_fs_Becken_Motion_0011', None, 'motion', 'pelvis',
+                                                     't2' ),
+        't2_tse_tra_fs_Becken_Shim_xz_0012': Dataset( 't2_tse_tra_fs_Becken_Shim_xz_0012', None, 'shim', 'pelvis',
+                                                      't2' )
     }
 
     deepNeuralNetworks = {
-        'Multiclass DenseResNet': 'networks.multiclass.CNN2D.DenseResNet.multiclass_DenseResNet',
-        'Multiclass InceptionNet': 'networks.multiclass.CNN2D.InceptionNet.multiclass_InceptionNet',
-        'Mulitclass ResNet-56': 'networks.multiclass.CNN2D.SENets.multiclass_ResNet-56',
-        'Multiclass SE-ResNet-56': 'networks.multiclass.CNN2D.SENets.multiclass_SE-ResNet-56',
-        'Mulitclass ResNet-50': 'networks.multiclass.CNN2D.SENets.multiclass_ResNet-50',
-        'Multiclass SE-ResNet-50': 'networks.multiclass.CNN2D.SENets.multiclass_SE-ResNet-50',
-        'Multiclass DenseNet-34': 'networks.multiclass.CNN2D.SENets.multiclass_DenseNet-34',
-        'Multiclass SE-DenseNet-34': 'networks.multiclass.CNN2D.SENets.multiclass_SE-DenseNet-34',
-        'Multiclass DenseNet-BC-100': 'networks.multiclass.CNN2D.SENets.multiclass_DenseNet-BC-100',
-        'Multiclass SE-DenseNet-BC-100': 'networks.multiclass.CNN2D.SENets.multiclass_SE-DenseNet-BC-100',
-        'Multiclass SE-ResNet-32': 'networks.multiclass.CNN2D.SENets.multiclass_SE-ResNet-32',
+        'Multiclass DenseResNet': 'networks.multiclass.DenseResNet.multiclass_DenseResNet',
+        'Multiclass InceptionNet': 'networks.multiclass.InceptionNet.multiclass_InceptionNet',
+        'Mulitclass ResNet-56': 'networks.multiclass.SENets.multiclass_ResNet-56',
+        'Multiclass SE-ResNet-56': 'networks.multiclass.SENets.multiclass_SE-ResNet-56',
+        'Mulitclass ResNet-50': 'networks.multiclass.SENets.multiclass_ResNet-50',
+        'Multiclass SE-ResNet-50': 'networks.multiclass.SENets.multiclass_SE-ResNet-50',
+        'Multiclass DenseNet-34': 'networks.multiclass.SENets.multiclass_DenseNet-34',
+        'Multiclass SE-DenseNet-34': 'networks.multiclass.SENets.multiclass_SE-DenseNet-34',
+        'Multiclass DenseNet-BC-100': 'networks.multiclass.SENets.multiclass_DenseNet-BC-100',
+        'Multiclass SE-DenseNet-BC-100': 'networks.multiclass.SENets.multiclass_SE-DenseNet-BC-100',
+        'Multiclass SE-ResNet-32': 'networks.multiclass.SENets.multiclass_SE-ResNet-32',
         'Multiclass 3D ResNet': 'networks.multiclass.CNN3D.multiclass_3D_ResNet',
         'Multiclass 3D SE-ResNet': 'networks.multiclass.CNN3D.multiclass_3D_SE-ResNet',
-        'Multiclass SE-ResNet-44_dense': 'networks.multiclass.CNN2D.SENets.multiclass_SE-ResNet-44_dense',
-        'FCN 3D-VResFCN': 'networks.FullyConvolutionalNetworks.motion.3D_VResFCN',
-        'FCN 3D-VResFCN-Upsampling': 'networks.FullyConvolutionalNetworks.motion.3D_VResFCN_Upsampling',
-        'FCN 3D-VResFCN-Upsampling small': 'networks.FullyConvolutionalNetworks.motion.3D_VResFCN_Upsampling_small',
-        'FCN 3D-VResFCN-Upsampling small_single': 'networks.FullyConvolutionalNetworks.motion.3D_VResFCN_Upsampling_small_single',
-        'FCN 3D-VResFCN-Upsampling final': 'networks.FullyConvolutionalNetworks.motion.3D_VResFCN_Upsampling_final',
+        'Multiclass SE-ResNet-44_dense': 'networks.multiclass.SENets.multiclass_SE-ResNet-44_dense',
+        'FCN 3D-VResFCN': 'networks.FullyConvolutionalNetworks.3D_VResFCN',
+        'FCN 3D-VResFCN-Upsampling': 'networks.FullyConvolutionalNetworks.3D_VResFCN_Upsampling',
+        'FCN 3D-VResFCN-Upsampling small': 'networks.FullyConvolutionalNetworks.3D_VResFCN_Upsampling_small',
+        'FCN 3D-VResFCN-Upsampling small_single': 'networks.FullyConvolutionalNetworks.3D_VResFCN_Upsampling_small_single',
+        'FCN 3D-VResFCN-Upsampling final': 'networks.FullyConvolutionalNetworks.3D_VResFCN_Upsampling_final',
+        'FCN 3D-VResFCN-Upsampling final Motion Binary': 'networks.FullyConvolutionalNetworks.3D_VResFCN_Upsampling_final_Motion_Binary',
+        'FCN 3D-VResFCN-Upsampling final Motion Shim Multi Label ': 'networks.FullyConvolutionalNetworks.3D_VResFCN_Upsampling_final_Motion_Shim_Label',
         'Multiclass 3D SE-DenseNet': 'networks.multiclass.CNN3D.multiclass_3D_SE-DenseNet'
     }
 
     # structure of the directory where the dicom files are located
     modelSubDir = "dicom_sorted"
-
-    # constants labeling modes
-    MASK_LABELING = 0
-    PATCH_LABELING = 1
-
-    # constants patching modes
-    PATCHING_2D = 0
-    PATCHING_3D = 1
-
-    # constants splitting modes
-    NONE_SPLITTING = 0
-    SIMPLE_RANDOM_SAMPLE_SPLITTING = 1
-    CROSS_VALIDATION_SPLITTING = 2
-    PATIENT_CROSS_VALIDATION_SPLITTING = 3
-
-    # constants storage mode
-    STORE_DISABLED = 0
-    STORE_HDF5 = 1
-    STORE_PATCH_BASED = 2
-
-    # optimizer constants
-    SGD_OPTIMIZER = 0
-    RMS_PROP_OPTIMIZER = 1
-    ADAGRAD_OPTIMIZER = 2
-    ADADELTA_OPTIMIZER = 3
-    ADAM_OPTIMIZER = 4
-
-    # Data Augmentation Parameters
-    WIDTH_SHIFT_RANGE = 0.2
-    HEIGHT_SHIFT_RANGE = 0.2
-    ROTATION_RANGE = 30
-    ZOOM_RANGE = 0.2
-
 
     def __init__(self):
         # GUI handle
@@ -123,8 +83,8 @@ class DeepLearningArtApp():
         self.selectedPatients = ''
         self.selectedDatasets = ''
 
-        self.pathDatabase, self.pathOutputPatching, self.markingsPath, self.learningOutputPath, self.pathOutputPatchingGAN \
-                = DeepLearningArtApp.getOSPathes(operatingSystem=0)  # for windows os=0, for linse server os=1. see method for pathes
+        self.pathDatabase, self.pathOutputPatching, self.markingsPath, self.learningOutputPath \
+            = DeepLearningArtApp.getOSPathes()  # for windows os=0, for linse server os=1. see method for pathes
 
         # attributes for patching
         self.patchSizeX = 40
@@ -136,32 +96,32 @@ class DeepLearningArtApp():
 
         self.isRandomShuffle = True
 
-        #attributes for labeling
+        # attributes for labeling
         self.labelingMode = ''
 
         self.classMappings = None
         self.classMappingsForPrediction = None
 
-        #attributes for patching
-        self.patchingMode = DeepLearningArtApp.PATCHING_2D
+        # attributes for patching
+        self.patchingMode = PATCHING_2D
         self.storeMode = ''
 
         # attributes for splitting
         self.datasetName = 'none'
-        self.splittingMode = DeepLearningArtApp.SIMPLE_RANDOM_SAMPLE_SPLITTING
-        self.trainTestDatasetRatio = 0.2 #part of test data
-        self.trainValidationRatio = 0.2 # part of Validation data in traindata
+        self.splittingMode = SIMPLE_RANDOM_SAMPLE_SPLITTING
+        self.trainTestDatasetRatio = 0.2  # part of test data
+        self.trainValidationRatio = 0.2  # part of Validation data in traindata
         self.numFolds = 5
 
         ################################################################################################################
-        #attributes for DNN and Training
+        # attributes for DNN and Training
         ################################################################################################################
         self.neuralNetworkModel = None
         self.batchSizes = None
         self.epochs = None
         self.learningRates = None
 
-        self.optimizer = DeepLearningArtApp.SGD_OPTIMIZER
+        self.optimizer = SGD_OPTIMIZER
         self.weightDecay = 0.0001
         self.momentum = 0.9
         self.nesterovEnabled = False
@@ -178,7 +138,6 @@ class DeepLearningArtApp():
         self.adaptive_eq = False
         self.histogram_eq = False
         ################################################################################################################
-
 
         # Attributes for classes and labels
         self.usingArtifacts = True
@@ -197,28 +156,6 @@ class DeepLearningArtApp():
         self.X_test = None
         self.Y_test = None
         self.Y_segMasks_test = None
-
-
-        ####################
-        ### ArtGAN Stuff ###
-        ####################
-        self.patients_ArtGAN = None
-        self.datasets_ArtGAN = None
-        self.datasets_ArtGAN_Pairs = None
-
-        self.patchSizeX_ArtGAN = 40
-        self.patchSizeY_ArtGAN = 40
-        self.patchSizeZ_ArtGAN = 5
-        self.patchOverlap_ArtGAN = 0.5
-
-        self.lscaleFactor_ArtGAN = [0.5, 1, 2]
-
-        self.storeMode_ArtGAN = DeepLearningArtApp.STORE_DISABLED
-        self.splittingMode_ArtGAN = DeepLearningArtApp.SIMPLE_RANDOM_SAMPLE_SPLITTING
-
-        self.trainTestDatasetRatio_ArtGAN = 0.2  # part of test data
-        self.trainValidationRatio_ArtGAN = 0.0  # part of Validation data in traindata
-        ####################
 
         ################################################################################################################
         #### Stuff for prediction
@@ -240,7 +177,6 @@ class DeepLearningArtApp():
 
         ################################################################################################################
 
-
     def generateDataset(self):
         '''
         method performs the splitting of the datasets to the learning datasets (training, validation, test)
@@ -248,121 +184,131 @@ class DeepLearningArtApp():
         :return:
         '''
         self.X_test = []
-        self.X_validation= []
+        self.X_validation = []
         self.X_train = []
         self.Y_test = []
         self.Y_validation = []
         self.Y_train = []
 
-        if self.patchingMode == DeepLearningArtApp.PATCHING_2D:
-            dAllPatches = np.zeros((self.patchSizeX, self.patchSizeY, 0))
-            dAllLabels = np.zeros(0)
+        if self.patchingMode == PATCHING_2D:
+            dAllPatches = np.zeros( (self.patchSizeX, self.patchSizeY, 0) )
+            dAllLabels = np.zeros( 0 )
             if self.usingSegmentationMasks:
-                dAllSegmentationMaskPatches = np.zeros((self.patchSizeX, self.patchSizeY, 0))
-        elif self.patchingMode == DeepLearningArtApp.PATCHING_3D:
-            dAllPatches = np.zeros((self.patchSizeX, self.patchSizeY, self.patchSizeZ, 0))
-            dAllLabels = np.zeros(0)
+                dAllSegmentationMaskPatches = np.zeros( (self.patchSizeX, self.patchSizeY, 0) )
+        elif self.patchingMode == PATCHING_3D:
+            dAllPatches = np.zeros( (self.patchSizeX, self.patchSizeY, self.patchSizeZ, 0) )
+            dAllLabels = np.zeros( 0 )
             if self.usingSegmentationMasks:
-                dAllSegmentationMaskPatches = np.zeros((self.patchSizeX, self.patchSizeY, self.patchSizeZ, 0))
+                dAllSegmentationMaskPatches = np.zeros( (self.patchSizeX, self.patchSizeY, self.patchSizeZ, 0) )
         else:
-            raise IOError("We do not know your patching mode...")
+            raise IOError( "We do not know your patching mode..." )
 
         # stuff for storing
-        if self.storeMode != DeepLearningArtApp.STORE_DISABLED:
+        if self.storeMode != STORE_DISABLED:
             # outPutFolder name:
-            outPutFolder = "Patients-" + str(len(self.selectedPatients)) + "_" + \
-                           "Datasets-" + str(len(self.selectedDatasets)) + "_" + \
-                           ("2D" if self.patchingMode == DeepLearningArtApp.PATCHING_2D else "3D") + \
+            outPutFolder = "Patients-" + str( len( self.selectedPatients ) ) + "_" + \
+                           "Datasets-" + str( len( self.selectedDatasets ) ) + "_" + \
+                           ("2D" if self.patchingMode == PATCHING_2D else "3D") + \
                            ('_SegMask_' if self.usingSegmentationMasks else '_') + \
-                           str(self.patchSizeX) + "x" + str(self.patchSizeY)
-            if self.patchingMode == DeepLearningArtApp.PATCHING_3D:
-                outPutFolder = outPutFolder + "x" + str(self.patchSizeZ)\
+                           str( self.patchSizeX ) + "x" + str( self.patchSizeY )
+            if self.patchingMode == PATCHING_3D:
+                outPutFolder = outPutFolder + "x" + str(self.patchSizeZ) \
 
-            outPutFolder = outPutFolder + "_Overlap-" + str(self.patchOverlapp) + "_" + \
-                           "Labeling-" + ("patch" if self.labelingMode == DeepLearningArtApp.PATCH_LABELING else "mask")
+            outPutFolder = outPutFolder + "_Overlap-" + str( self.patchOverlapp ) + "_" + \
+                           "Labeling-" + ("patch" if self.labelingMode == PATCH_LABELING else "mask")
 
-            if self.splittingMode == DeepLearningArtApp.SIMPLE_RANDOM_SAMPLE_SPLITTING:
+            if self.splittingMode == SIMPLE_RANDOM_SAMPLE_SPLITTING:
                 outPutFolder = outPutFolder + "_Split-simpleRand"
-            elif self.splittingMode == DeepLearningArtApp.CROSS_VALIDATION_SPLITTING:
+            elif self.splittingMode == CROSS_VALIDATION_SPLITTING:
                 outPutFolder = outPutFolder + "_Split-crossVal"
-            elif self.splittingMode == DeepLearningArtApp.SIMPLE_RANDOM_SAMPLE_SPLITTING:
+            elif self.splittingMode == SIMPLE_RANDOM_SAMPLE_SPLITTING:
                 outPutFolder = outPutFolder + "Split-patientCrossVal"
 
             outputFolderPath = self.pathOutputPatching + os.sep + outPutFolder
 
-            if not os.path.exists(outputFolderPath):
-                os.makedirs(outputFolderPath)
+            if not os.path.exists( outputFolderPath ):
+                os.makedirs( outputFolderPath )
 
             # create dataset summary
             self.datasetName = outPutFolder
-            self.createDatasetInfoSummary(outPutFolder, outputFolderPath)
+            self.createDatasetInfoSummary( outPutFolder, outputFolderPath )
 
-            if self.storeMode == DeepLearningArtApp.STORE_PATCH_BASED:
+            if self.storeMode == STORE_PATCH_BASED:
                 outPutFolderDataPath = outputFolderPath + os.sep + "data"
-                if not os.path.exists(outPutFolderDataPath):
-                    os.makedirs(outPutFolderDataPath)
+                if not os.path.exists( outPutFolderDataPath ):
+                    os.makedirs( outPutFolderDataPath )
 
                 labelDict = {}
 
-        #for storing patch based
+        # for storing patch based
         iPatchToDisk = 0
 
         for patient in self.selectedPatients:
             for dataset in self.selectedDatasets:
                 currentDataDir = self.pathDatabase + os.sep + patient + os.sep + self.modelSubDir + os.sep + dataset
-                if os.path.exists(currentDataDir):
+                if os.path.exists( currentDataDir ):
                     # get list with all paths of dicoms for current patient and current dataset
-                    fileNames = os.listdir(currentDataDir)
-                    fileNames = [os.path.join(currentDataDir, f) for f in fileNames]
+                    fileNames = os.listdir( currentDataDir )
+                    fileNames = [os.path.join( currentDataDir, f ) for f in fileNames]
 
                     # read DICOMS
-                    dicomDataset = [dicom.read_file(f) for f in fileNames]
+                    dicomDataset = [dicom.read_file( f ) for f in fileNames]
 
                     # Combine DICOM Slices to a single 3D image (voxel)
                     try:
-                        voxel_ndarray, ijk_to_xyz = dicom_np.combine_slices(dicomDataset)
-                        voxel_ndarray = voxel_ndarray.astype(float)
-                        voxel_ndarray = np.swapaxes(voxel_ndarray, 0, 1)
+                        voxel_ndarray, ijk_to_xyz = dicom_np.combine_slices( dicomDataset )
+                        voxel_ndarray = voxel_ndarray.astype( float )
+                        voxel_ndarray = np.swapaxes( voxel_ndarray, 0, 1 )
                     except dicom_np.DicomImportException as e:
-                        #invalid DICOM data
+                        # invalid DICOM data
                         raise
 
                     # normalization of DICOM voxel
-                    rangeNorm = [0,1]
-                    norm_voxel_ndarray = (voxel_ndarray-np.min(voxel_ndarray))*(rangeNorm[1]-rangeNorm[0])/(np.max(voxel_ndarray)-np.min(voxel_ndarray))
+                    rangeNorm = [0, 1]
+                    norm_voxel_ndarray = (voxel_ndarray - np.min( voxel_ndarray )) * (rangeNorm[1] - rangeNorm[0]) / (
+                                np.max( voxel_ndarray ) - np.min( voxel_ndarray ))
+
+                    # sort array
+                    newnparray = np.zeros( shape=norm_voxel_ndarray.shape )
+                    for i in range( norm_voxel_ndarray.shape[-1] ):
+                        newnparray[:, :, norm_voxel_ndarray.shape[-1] - 1 - i] = norm_voxel_ndarray[:, :, i]
+
+                    norm_voxel_ndarray = newnparray
 
                     # 2D or 3D patching?
-                    if self.patchingMode == DeepLearningArtApp.PATCHING_2D:
+                    if self.patchingMode == PATCHING_2D:
                         # 2D patching
                         # mask labeling or path labeling
-                        if self.labelingMode == DeepLearningArtApp.MASK_LABELING:
+                        if self.labelingMode == MASK_LABELING:
                             # path to marking file
                             currentMarkingsPath = self.getMarkingsPath() + os.sep + patient + ".json"
                             # get the markings mask
-                            labelMask_ndarray = create_MASK_Array(currentMarkingsPath, patient, dataset, voxel_ndarray.shape[0],
-                                                                  voxel_ndarray.shape[1], voxel_ndarray.shape[2])
+                            labelMask_ndarray = create_MASK_Array( currentMarkingsPath, patient, dataset,
+                                                                   voxel_ndarray.shape[0],
+                                                                   voxel_ndarray.shape[1], voxel_ndarray.shape[2] )
 
-                            #compute 2D Mask labling patching
-                            dPatches, dLabels = fRigidPatching_maskLabeling(norm_voxel_ndarray,
-                                                                            [self.patchSizeX, self.patchSizeY],
-                                                                            self.patchOverlapp,
-                                                                            labelMask_ndarray, 0.5,
-                                                                            DeepLearningArtApp.datasets[dataset])
+                            # compute 2D Mask labling patching
+                            dPatches, dLabels = fRigidPatching_maskLabeling( norm_voxel_ndarray,
+                                                                             [self.patchSizeX, self.patchSizeY],
+                                                                             self.patchOverlapp,
+                                                                             labelMask_ndarray, 0.5,
+                                                                             DeepLearningArtApp.datasets[dataset] )
 
                             # convert to float32
-                            dPatches = np.asarray(dPatches, dtype=np.float32)
-                            dLabels = np.asarray(dLabels, dtype=np.float32)
-
+                            dPatches = np.asarray( dPatches, dtype=np.float32 )
+                            dLabels = np.asarray( dLabels, dtype=np.float32 )
 
                             ############################################################################################
                             if self.usingSegmentationMasks:
-                                dPatchesOfMask, dLabelsMask = fRigidPatching_maskLabeling(labelMask_ndarray,
-                                                                                [self.patchSizeX, self.patchSizeY],
-                                                                                self.patchOverlapp,
-                                                                                labelMask_ndarray, 0.5,
-                                                                                DeepLearningArtApp.datasets[dataset])
+                                dPatchesOfMask, dLabelsMask = fRigidPatching_maskLabeling( labelMask_ndarray,
+                                                                                           [self.patchSizeX,
+                                                                                            self.patchSizeY],
+                                                                                           self.patchOverlapp,
+                                                                                           labelMask_ndarray, 0.5,
+                                                                                           DeepLearningArtApp.datasets[
+                                                                                               dataset] )
 
-                                dPatchesOfMask = np.asarray(dPatchesOfMask, dtype=np.float32)
+                                dPatchesOfMask = np.asarray( dPatchesOfMask, dtype=np.float32 )
 
                             # sio.savemat('D:med_data/' + patient + '_' + dataset + '_voxel_and_mask.mat',
                             #             {'mask': labelMask_ndarray, 'voxel': voxel_ndarray,
@@ -371,247 +317,301 @@ class DeepLearningArtApp():
                             ############################################################################################
 
 
-                        elif self.labelingMode == DeepLearningArtApp.PATCH_LABELING:
+                        elif self.labelingMode == PATCH_LABELING:
                             # get label
                             datasetLabel = DeepLearningArtApp.datasets[dataset].getDatasetLabel()
 
-                            #compute 2D patch labeling patching
-                            dPatches, dLabels = fRigidPatching_patchLabeling(norm_voxel_ndarray,
-                                                                             [self.patchSizeX, self.patchSizeY],
-                                                                             self.patchOverlapp, 1)
-                            dLabels = dLabels*datasetLabel
+                            # compute 2D patch labeling patching
+                            dPatches, dLabels = fRigidPatching_patchLabeling( norm_voxel_ndarray,
+                                                                              [self.patchSizeX, self.patchSizeY],
+                                                                              self.patchOverlapp, 1 )
+                            dLabels = dLabels * datasetLabel
 
                             # convert to float32
-                            dPatches = np.asarray(dPatches, dtype=np.float32)
-                            dLabels = np.asarray(dLabels, dtype=np.float32)
-                    elif self.patchingMode == DeepLearningArtApp.PATCHING_3D:
+                            dPatches = np.asarray( dPatches, dtype=np.float32 )
+                            dLabels = np.asarray( dLabels, dtype=np.float32 )
+                    elif self.patchingMode == PATCHING_3D:
                         # 3D Patching
-                        if self.labelingMode == DeepLearningArtApp.MASK_LABELING:
+                        if self.labelingMode == MASK_LABELING:
                             # path to marking file
                             currentMarkingsPath = self.getMarkingsPath() + os.sep + patient + ".json"
                             # get the markings mask
-                            labelMask_ndarray = create_MASK_Array(currentMarkingsPath, patient, dataset,
-                                                                  voxel_ndarray.shape[0],
-                                                                  voxel_ndarray.shape[1], voxel_ndarray.shape[2])
+                            labelMask_ndarray = create_MASK_Array( currentMarkingsPath, patient, dataset,
+                                                                   voxel_ndarray.shape[0],
+                                                                   voxel_ndarray.shape[1], voxel_ndarray.shape[2] )
+
+                            # for i in range(norm_voxel_ndarray.shape[-1]):
+                            #     plt.subplot(121)
+                            #     plt.imshow(norm_voxel_ndarray[:, :, i])
+                            #
+                            #     plt.subplot(122)
+                            #     plt.imshow(labelMask_ndarray[:, :, i])
+                            #
+                            #     plt.show()
+                            #
+                            #     print(i)
 
                             # compute 3D Mask labling patching
-                            dPatches, dLabels = fRigidPatching3D_maskLabeling(norm_voxel_ndarray,
-                                                                 [self.patchSizeX, self.patchSizeY, self.patchSizeZ],
-                                                                 self.patchOverlapp,
-                                                                 labelMask_ndarray,
-                                                                 0.5,
-                                                                 DeepLearningArtApp.datasets[dataset])
+                            dPatches, dLabels = fRigidPatching3D_maskLabeling( norm_voxel_ndarray,
+                                                                               [self.patchSizeX, self.patchSizeY,
+                                                                                self.patchSizeZ],
+                                                                               self.patchOverlapp,
+                                                                               labelMask_ndarray,
+                                                                               0.5,
+                                                                               DeepLearningArtApp.datasets[dataset] )
 
                             # convert to float32
-                            dPatches = np.asarray(dPatches, dtype=np.float32)
-                            dLabels = np.asarray(dLabels, dtype=np.float32)
+                            dPatches = np.asarray( dPatches, dtype=np.float32 )
+                            dLabels = np.asarray( dLabels, dtype=np.float32 )
 
                             ############################################################################################
                             if self.usingSegmentationMasks:
-                                dPatchesOfMask, dLabelsMask = fRigidPatching3D_maskLabeling(labelMask_ndarray,
-                                                                                          [self.patchSizeX, self.patchSizeY, self.patchSizeZ],
-                                                                                          self.patchOverlapp,
-                                                                                          labelMask_ndarray, 0.5,
-                                                                                          DeepLearningArtApp.datasets[dataset])
-                                dPatchesOfMask = np.asarray(dPatchesOfMask, dtype=np.byte)
+                                dPatchesOfMask, dLabelsMask = fRigidPatching3D_maskLabeling( labelMask_ndarray,
+                                                                                             [self.patchSizeX,
+                                                                                              self.patchSizeY,
+                                                                                              self.patchSizeZ],
+                                                                                             self.patchOverlapp,
+                                                                                             labelMask_ndarray, 0.5,
+                                                                                             DeepLearningArtApp.datasets[
+                                                                                                 dataset] )
+                                dPatchesOfMask = np.asarray( dPatchesOfMask, dtype=np.byte )
                             ############################################################################################
 
-                        elif self.labelingMode == DeepLearningArtApp.PATCH_LABELING:
-                            print("3D local patch labeling not available until now!")
+                        elif self.labelingMode == PATCH_LABELING:
+                            print( "3D local patch labeling not available until now!" )
 
                     else:
-                            print("We do not know what labeling mode you want to use :p")
+                        print( "We do not know what labeling mode you want to use :p" )
 
-
-                    if self.storeMode == DeepLearningArtApp.STORE_PATCH_BASED:
+                    if self.storeMode == STORE_PATCH_BASED:
                         # patch based storage
-                        if self.patchingMode == DeepLearningArtApp.PATCHING_3D:
-                            for i in range(0, dPatches.shape[3]):
-                                patchSlice = np.asarray(dPatches[:,:,:,i], dtype=np.float32)
-                                np.save((outPutFolderDataPath + os.sep + "X"+str(iPatchToDisk)+".npy"), patchSlice, allow_pickle=False)
-                                labelDict["Y"+str(iPatchToDisk)] = int(dLabels[i])
-                                iPatchToDisk+=1
+                        if self.patchingMode == PATCHING_3D:
+                            for i in range( 0, dPatches.shape[3] ):
+                                patchSlice = np.asarray( dPatches[:, :, :, i], dtype=np.float32 )
+                                np.save( (outPutFolderDataPath + os.sep + "X" + str( iPatchToDisk ) + ".npy"),
+                                         patchSlice, allow_pickle=False )
+                                labelDict["Y" + str( iPatchToDisk )] = int( dLabels[i] )
+                                iPatchToDisk += 1
                         else:
-                            for i in range(0, dPatches.shape[2]):
-                                patchSlice = np.asarray(dPatches[:,:,i], dtype=np.float32)
-                                np.save((outPutFolderDataPath + os.sep + "X"+str(iPatchToDisk)+".npy"), patchSlice, allow_pickle=False)
-                                labelDict["Y"+str(iPatchToDisk)] = int(dLabels[i])
-                                iPatchToDisk+=1
+                            for i in range( 0, dPatches.shape[2] ):
+                                patchSlice = np.asarray( dPatches[:, :, i], dtype=np.float32 )
+                                np.save( (outPutFolderDataPath + os.sep + "X" + str( iPatchToDisk ) + ".npy"),
+                                         patchSlice, allow_pickle=False )
+                                labelDict["Y" + str( iPatchToDisk )] = int( dLabels[i] )
+                                iPatchToDisk += 1
 
                     else:
                         # concatenate all patches in one array
-                        if self.patchingMode == DeepLearningArtApp.PATCHING_2D:
-                            dAllPatches = np.concatenate((dAllPatches, dPatches), axis=2)
-                            dAllLabels = np.concatenate((dAllLabels, dLabels), axis=0)
+                        if self.patchingMode == PATCHING_2D:
+                            dAllPatches = np.concatenate( (dAllPatches, dPatches), axis=2 )
+                            dAllLabels = np.concatenate( (dAllLabels, dLabels), axis=0 )
                             if self.usingSegmentationMasks:
-                                dAllSegmentationMaskPatches = np.concatenate((dAllSegmentationMaskPatches, dPatchesOfMask), axis=2)
-                        elif self.patchingMode == DeepLearningArtApp.PATCHING_3D:
-                            dAllPatches = np.concatenate((dAllPatches, dPatches), axis=3)
-                            dAllLabels = np.concatenate((dAllLabels, dLabels), axis=0)
+                                dAllSegmentationMaskPatches = np.concatenate(
+                                    (dAllSegmentationMaskPatches, dPatchesOfMask), axis=2 )
+                        elif self.patchingMode == PATCHING_3D:
+                            dAllPatches = np.concatenate( (dAllPatches, dPatches), axis=3 )
+                            dAllLabels = np.concatenate( (dAllLabels, dLabels), axis=0 )
                             if self.usingSegmentationMasks:
-                                dAllSegmentationMaskPatches = np.concatenate((dAllSegmentationMaskPatches, dPatchesOfMask), axis=3)
+                                dAllSegmentationMaskPatches = np.concatenate(
+                                    (dAllSegmentationMaskPatches, dPatchesOfMask), axis=3 )
 
+        #         # 3D Data Augmentation
+        #         indexSlices = range(dAllPatches.shape[0])
+        #         indexSlices = np.random.permutation(indexSlices)
+        #         amountOfAugmentedData = 0.2
+        #         maxIndex = np.floor(amountOfAugmentedData*dAllPatches.shape[0])
+        # #        patches_to_augment = dAllPatches[indexSlices[0:maxIndex]]
+        #  #       labels_to_augment = dAllSegmentationMaskPatches[indexSlices[0:maxIndex]]
+        #
+        #         patches_augmented, labelMasks_augmented = augment_3D_Data(patches=dAllPatches.copy(),
+        #                                                               labels=dAllSegmentationMaskPatches.copy(),
+        #                                                               xFlip=True, yFlip=True, zFlip=True,
+        #                                                               xShift=True, yShift=True, zShift=True)
+        #
+        #         plt.subplot(121)
+        #         plt.imshow(dAllPatches[:, :, 4, 10])
+        #
+        #         plt.subplot(122)
+        #         plt.imshow(patches_augmented[:,:, 4, 10])
+        #
+        #         plt.show()
+        #
+        #         dAllPatches = np.concatenate((dAllPatches, patches_augmented), axis=3)
+        #         patches_augmented = None
+        #         dAllSegmentationMaskPatches = np.concatenate((dAllSegmentationMaskPatches, labelMasks_augmented), axis=3)
+        #         labelMasks_augmented = None
+        #         dAllLabels = np.concatenate((dAllLabels, dAllLabels), axis=0)
 
         # dataset splitting
         # store mode
-        if self.storeMode != DeepLearningArtApp.STORE_DISABLED:
+        if self.storeMode != STORE_DISABLED:
             # H5py store mode
-            if self.storeMode == DeepLearningArtApp.STORE_HDF5:
+            if self.storeMode == STORE_HDF5:
                 # train, validation, test datasets are computed by splitting all data
-                if self.patchingMode == DeepLearningArtApp.PATCHING_2D:
+                if self.patchingMode == PATCHING_2D:
                     if not self.usingSegmentationMasks:
-                        [self.X_train], [self.Y_train], [self.X_validation], [self.Y_validation], [self.X_test], [self.Y_test] \
-                            = fSplitDataset(dAllPatches, dAllLabels, allPats=self.selectedPatients,
-                                            sSplitting=self.splittingMode,
-                                            patchSize=[self.patchSizeX, self.patchSizeY],
-                                            patchOverlap=self.patchOverlapp,
-                                            testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                            validationTrainRatio=self.trainValidationRatio,
-                                            outPutPath=self.pathOutputPatching,
-                                            nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                        [self.X_train], [self.Y_train], [self.X_validation], [self.Y_validation], [self.X_test], [
+                            self.Y_test] \
+                            = fSplitDataset( dAllPatches, dAllLabels, allPats=self.selectedPatients,
+                                             sSplitting=self.splittingMode,
+                                             patchSize=[self.patchSizeX, self.patchSizeY],
+                                             patchOverlap=self.patchOverlapp,
+                                             testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                             validationTrainRatio=self.trainValidationRatio,
+                                             outPutPath=self.pathOutputPatching,
+                                             nfolds=0, isRandomShuffle=self.isRandomShuffle )
                     else:
                         # do segmentation mask split
                         [self.X_train], [self.Y_train], [self.Y_segMasks_train], \
                         [self.X_validation], [self.Y_validation], [self.Y_segMasks_validation], \
                         [self.X_test], [self.Y_test], [self.Y_segMasks_test] \
-                            = fSplitSegmentationDataset(dAllPatches, dAllLabels, dAllSegmentationMaskPatches,
-                                                        allPats=self.selectedPatients,
-                                                        sSplitting=self.splittingMode,
-                                                        patchSize=[self.patchSizeX, self.patchSizeY],
-                                                        patchOverlap=self.patchOverlapp,
-                                                        testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                                        validationTrainRatio=self.trainValidationRatio,
-                                                        outPutPath=self.pathOutputPatching,
-                                                        nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                            = fSplitSegmentationDataset( dAllPatches, dAllLabels, dAllSegmentationMaskPatches,
+                                                         allPats=self.selectedPatients,
+                                                         sSplitting=self.splittingMode,
+                                                         patchSize=[self.patchSizeX, self.patchSizeY],
+                                                         patchOverlap=self.patchOverlapp,
+                                                         testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                                         validationTrainRatio=self.trainValidationRatio,
+                                                         outPutPath=self.pathOutputPatching,
+                                                         nfolds=0, isRandomShuffle=self.isRandomShuffle )
 
                     # store datasets with h5py
-                    with h5py.File(outputFolderPath + os.sep + 'datasets.hdf5', 'w') as hf:
-                        hf.create_dataset('X_train', data=self.X_train)
-                        hf.create_dataset('X_validation', data=self.X_validation)
-                        hf.create_dataset('X_test', data=self.X_test)
-                        hf.create_dataset('Y_train', data=self.Y_train)
-                        hf.create_dataset('Y_validation', data=self.Y_validation)
-                        hf.create_dataset('Y_test', data=self.Y_test)
+                    with h5py.File( outputFolderPath + os.sep + 'datasets.hdf5', 'w' ) as hf:
+                        hf.create_dataset( 'X_train', data=self.X_train )
+                        hf.create_dataset( 'X_validation', data=self.X_validation )
+                        hf.create_dataset( 'X_test', data=self.X_test )
+                        hf.create_dataset( 'Y_train', data=self.Y_train )
+                        hf.create_dataset( 'Y_validation', data=self.Y_validation )
+                        hf.create_dataset( 'Y_test', data=self.Y_test )
                         if self.usingSegmentationMasks == True:
-                            hf.create_dataset('Y_segMasks_train', data=self.Y_segMasks_train)
-                            hf.create_dataset('Y_segMasks_validation', data=self.Y_segMasks_validation)
-                            hf.create_dataset('Y_segMasks_test', data=self.Y_segMasks_test)
+                            hf.create_dataset( 'Y_segMasks_train', data=self.Y_segMasks_train )
+                            hf.create_dataset( 'Y_segMasks_validation', data=self.Y_segMasks_validation )
+                            hf.create_dataset( 'Y_segMasks_test', data=self.Y_segMasks_test )
 
-                elif self.patchingMode == DeepLearningArtApp.PATCHING_3D:
+                elif self.patchingMode == PATCHING_3D:
                     if not self.usingSegmentationMasks:
                         [self.X_train], [self.Y_train], [self.X_validation], [self.Y_validation], [self.X_test], [
                             self.Y_test] \
-                            = fSplitDataset(dAllPatches, dAllLabels, allPats=self.selectedPatients,
-                                            sSplitting=self.splittingMode,
-                                            patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
-                                            patchOverlap=self.patchOverlapp,
-                                            testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                            validationTrainRatio=self.trainValidationRatio,
-                                            outPutPath=self.pathOutputPatching,
-                                            nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                            = fSplitDataset( dAllPatches, dAllLabels, allPats=self.selectedPatients,
+                                             sSplitting=self.splittingMode,
+                                             patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
+                                             patchOverlap=self.patchOverlapp,
+                                             testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                             validationTrainRatio=self.trainValidationRatio,
+                                             outPutPath=self.pathOutputPatching,
+                                             nfolds=0, isRandomShuffle=self.isRandomShuffle )
                     else:
                         [self.X_train], [self.Y_train], [self.Y_segMasks_train], \
                         [self.X_validation], [self.Y_validation], [self.Y_segMasks_validation], \
-                        [self.X_test], [self.Y_test], [self.Y_segMasks_test]\
-                            = fSplitSegmentationDataset(dAllPatches,
-                                                        dAllLabels,
-                                                        dAllSegmentationMaskPatches,
-                                                        allPats=self.selectedPatients,
-                                                        sSplitting=self.splittingMode,
-                                                        patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
-                                                        patchOverlap=self.patchOverlapp,
-                                                        testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                                        validationTrainRatio=self.trainValidationRatio,
-                                                        outPutPath=self.pathOutputPatching,
-                                                        nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                        [self.X_test], [self.Y_test], [self.Y_segMasks_test] \
+                            = fSplitSegmentationDataset( dAllPatches,
+                                                         dAllLabels,
+                                                         dAllSegmentationMaskPatches,
+                                                         allPats=self.selectedPatients,
+                                                         sSplitting=self.splittingMode,
+                                                         patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
+                                                         patchOverlap=self.patchOverlapp,
+                                                         testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                                         validationTrainRatio=self.trainValidationRatio,
+                                                         outPutPath=self.pathOutputPatching,
+                                                         nfolds=0, isRandomShuffle=self.isRandomShuffle )
 
                     # store datasets with h5py
-                    with h5py.File(outputFolderPath+os.sep+'datasets.hdf5', 'w') as hf:
-                        hf.create_dataset('X_train', data=self.X_train)
-                        hf.create_dataset('X_validation', data=self.X_validation)
-                        hf.create_dataset('X_test', data=self.X_test)
-                        hf.create_dataset('Y_train', data=self.Y_train)
-                        hf.create_dataset('Y_validation', data=self.Y_validation)
-                        hf.create_dataset('Y_test', data=self.Y_test)
+                    with h5py.File( outputFolderPath + os.sep + 'datasets.hdf5', 'w' ) as hf:
+                        hf.create_dataset( 'X_train', data=self.X_train )
+                        hf.create_dataset( 'X_validation', data=self.X_validation )
+                        hf.create_dataset( 'X_test', data=self.X_test )
+                        hf.create_dataset( 'Y_train', data=self.Y_train )
+                        hf.create_dataset( 'Y_validation', data=self.Y_validation )
+                        hf.create_dataset( 'Y_test', data=self.Y_test )
                         if self.usingSegmentationMasks:
-                            hf.create_dataset('Y_segMasks_train', data=self.Y_segMasks_train)
-                            hf.create_dataset('Y_segMasks_validation', data=self.Y_segMasks_validation)
-                            hf.create_dataset('Y_segMasks_test', data=self.Y_segMasks_test)
+                            hf.create_dataset( 'Y_segMasks_train', data=self.Y_segMasks_train )
+                            hf.create_dataset( 'Y_segMasks_validation', data=self.Y_segMasks_validation )
+                            hf.create_dataset( 'Y_segMasks_test', data=self.Y_segMasks_test )
 
-            elif self.storeMode == DeepLearningArtApp.STORE_PATCH_BASED:
-                with open(outputFolderPath+os.sep+"labels.json", 'w') as fp:
-                    json.dump(labelDict, fp)
+            elif self.storeMode == STORE_PATCH_BASED:
+                with open( outputFolderPath + os.sep + "labels.json", 'w' ) as fp:
+                    json.dump( labelDict, fp )
         else:
             # no storage of patched datasets
-            if self.patchingMode == DeepLearningArtApp.PATCHING_2D:
+            if self.patchingMode == PATCHING_2D:
                 if not self.usingSegmentationMasks:
                     [self.X_train], [self.Y_train], [self.X_validation], [self.Y_validation], [self.X_test], [
                         self.Y_test] \
-                        = fSplitDataset(dAllPatches, dAllLabels, allPats=self.selectedPatients,
-                                        sSplitting=self.splittingMode,
-                                        patchSize=[self.patchSizeX, self.patchSizeY],
-                                        patchOverlap=self.patchOverlapp,
-                                        testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                        validationTrainRatio=self.trainValidationRatio,
-                                        outPutPath=self.pathOutputPatching,
-                                        nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                        = fSplitDataset( dAllPatches, dAllLabels, allPats=self.selectedPatients,
+                                         sSplitting=self.splittingMode,
+                                         patchSize=[self.patchSizeX, self.patchSizeY],
+                                         patchOverlap=self.patchOverlapp,
+                                         testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                         validationTrainRatio=self.trainValidationRatio,
+                                         outPutPath=self.pathOutputPatching,
+                                         nfolds=0, isRandomShuffle=self.isRandomShuffle )
                 else:
                     # do segmentation mask split
                     [self.X_train], [self.Y_train], [self.Y_segMasks_train], \
                     [self.X_validation], [self.Y_validation], [self.Y_segMasks_validation], \
                     [self.X_test], [self.Y_test], [self.Y_segMasks_test] \
-                        = fSplitSegmentationDataset(dAllPatches,
-                                                    dAllLabels,
-                                                    dAllSegmentationMaskPatches,
-                                                    allPats=self.selectedPatients,
-                                                    sSplitting=self.splittingMode,
-                                                    patchSize=[self.patchSizeX, self.patchSizeY],
-                                                    patchOverlap=self.patchOverlapp,
-                                                    testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                                    validationTrainRatio=self.trainValidationRatio,
-                                                    outPutPath=self.pathOutputPatching,
-                                                    nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                        = fSplitSegmentationDataset( dAllPatches,
+                                                     dAllLabels,
+                                                     dAllSegmentationMaskPatches,
+                                                     allPats=self.selectedPatients,
+                                                     sSplitting=self.splittingMode,
+                                                     patchSize=[self.patchSizeX, self.patchSizeY],
+                                                     patchOverlap=self.patchOverlapp,
+                                                     testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                                     validationTrainRatio=self.trainValidationRatio,
+                                                     outPutPath=self.pathOutputPatching,
+                                                     nfolds=0, isRandomShuffle=self.isRandomShuffle )
 
-            elif self.patchingMode == DeepLearningArtApp.PATCHING_3D:
+            elif self.patchingMode == PATCHING_3D:
                 if not self.usingSegmentationMasks:
                     [self.X_train], [self.Y_train], [self.X_validation], [self.Y_validation], [self.X_test], [
                         self.Y_test] \
-                        = fSplitDataset(dAllPatches, dAllLabels, allPats=self.selectedPatients,
-                                        sSplitting=self.splittingMode,
-                                        patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
-                                        patchOverlap=self.patchOverlapp,
-                                        testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                        validationTrainRatio=self.trainValidationRatio,
-                                        outPutPath=self.pathOutputPatching,
-                                        nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                        = fSplitDataset( dAllPatches, dAllLabels, allPats=self.selectedPatients,
+                                         sSplitting=self.splittingMode,
+                                         patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
+                                         patchOverlap=self.patchOverlapp,
+                                         testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                         validationTrainRatio=self.trainValidationRatio,
+                                         outPutPath=self.pathOutputPatching,
+                                         nfolds=0, isRandomShuffle=self.isRandomShuffle )
                 else:
                     [self.X_train], [self.Y_train], [self.Y_segMasks_train], \
                     [self.X_validation], [self.Y_validation], [self.Y_segMasks_validation], \
                     [self.X_test], [self.Y_test], [self.Y_segMasks_test] \
-                        = fSplitSegmentationDataset(dAllPatches,
-                                                    dAllLabels,
-                                                    dAllSegmentationMaskPatches,
-                                                    allPats=self.selectedPatients,
-                                                    sSplitting=self.splittingMode,
-                                                    patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
-                                                    patchOverlap=self.patchOverlapp,
-                                                    testTrainingDatasetRatio=self.trainTestDatasetRatio,
-                                                    validationTrainRatio=self.trainValidationRatio,
-                                                    outPutPath=self.pathOutputPatching,
-                                                    nfolds=0, isRandomShuffle=self.isRandomShuffle)
+                        = fSplitSegmentationDataset( dAllPatches,
+                                                     dAllLabels,
+                                                     dAllSegmentationMaskPatches,
+                                                     allPats=self.selectedPatients,
+                                                     sSplitting=self.splittingMode,
+                                                     patchSize=[self.patchSizeX, self.patchSizeY, self.patchSizeZ],
+                                                     patchOverlap=self.patchOverlapp,
+                                                     testTrainingDatasetRatio=self.trainTestDatasetRatio,
+                                                     validationTrainRatio=self.trainValidationRatio,
+                                                     outPutPath=self.pathOutputPatching,
+                                                     nfolds=0, isRandomShuffle=self.isRandomShuffle )
 
-            print()
+
+            # for i in range(self.X_train.shape[0]):
+            #     plt.subplot(121)
+            #     plt.imshow(self.X_train[i, :, :, 4])
+            #
+            #     plt.subplot(122)
+            #     plt.imshow(self.Y_segMasks_train[i, :, :, 4])
+            #
+            #     plt.show()
+
+            pass
 
     def performTraining(self):
         # set GPU
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(self.gpu_id)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str( self.gpu_id )
 
         # get output vector for different classes
-        classes = np.asarray(np.unique(self.Y_train, ), dtype=int)
-        self.classMappings = Label.mapClassesToOutputVector(classes=classes,
-                                                       usingArtefacts=self.usingArtifacts,
-                                                       usingBodyRegion=self.usingBodyRegions,
-                                                       usingTWeightings=self.usingTWeighting)
+        classes = np.asarray( np.unique( self.Y_train, ), dtype=int )
+        self.classMappings = Label.mapClassesToOutputVector( classes=classes, usingArtefacts=self.usingArtifacts,
+                                                             usingBodyRegion=self.usingBodyRegions,
+                                                             usingTWeightings=self.usingTWeighting )
 
         Y_train = []
         for i in range(self.Y_train.shape[0]):
@@ -630,61 +630,246 @@ class DeepLearningArtApp():
 
         # output folder
         outPutFolderDataPath = self.learningOutputPath + os.sep + self.neuralNetworkModel + "_"
-        if self.patchingMode == DeepLearningArtApp.PATCHING_2D:
-            outPutFolderDataPath += "2D" + "_" + str(self.patchSizeX) + "x" + str(self.patchSizeY)
-        elif self.patchingMode == DeepLearningArtApp.PATCHING_3D:
-            outPutFolderDataPath += "3D" + "_" + str(self.patchSizeX) + "x" + str(self.patchSizeY) + \
-                                    "x" + str(self.patchSizeZ)
+        if self.patchingMode == PATCHING_2D:
+            outPutFolderDataPath += "2D" + "_" + str( self.patchSizeX ) + "x" + str( self.patchSizeY )
+        elif self.patchingMode == PATCHING_3D:
+            outPutFolderDataPath += "3D" + "_" + str( self.patchSizeX ) + "x" + str( self.patchSizeY ) + \
+                                    "x" + str( self.patchSizeZ )
 
-        outPutFolderDataPath += "_" + datetime.datetime.today().strftime('%Y-%m-%d_%H-%M')
+        outPutFolderDataPath += "_" + datetime.datetime.today().strftime( '%Y-%m-%d_%H-%M' )
 
-        if not os.path.exists(outPutFolderDataPath):
-            os.makedirs(outPutFolderDataPath)
+        if not os.path.exists( outPutFolderDataPath ):
+            os.makedirs( outPutFolderDataPath )
 
-        if not os.path.exists(outPutFolderDataPath + os.sep + 'checkpoints'):
-            os.makedirs(outPutFolderDataPath + os.sep + 'checkpoints')
+        if not os.path.exists( outPutFolderDataPath + os.sep + 'checkpoints' ):
+            os.makedirs( outPutFolderDataPath + os.sep + 'checkpoints' )
 
         # summarize cnn and training
-        self.create_cnn_training_summary(self.neuralNetworkModel, outPutFolderDataPath)
+        self.create_cnn_training_summary( self.neuralNetworkModel, outPutFolderDataPath )
 
-        if self.Y_segMasks_test is not None and self.Y_segMasks_train is not None and self.Y_segMasks_validation is not None:
-            self.usingSegmentationMasks = True
+        # if self.Y_segMasks_test is not None and self.Y_segMasks_train is not None and self.Y_segMasks_validation is not None:
+        #    self.usingSegmentationMasks = True
+        # else:
+        #    self.usingSegmentationMasks = False
+
+        ############################################################################################
+        ##### Dataset preparation ####################################################################
+        ################################################################################################
+
+        if self.usingSegmentationMasks:
+            iCase = 0
         else:
-            self.usingSegmentationMasks = False
+            iCase = 1
 
-        if not self.usingSegmentationMasks:
-            cnn_main.fRunCNN(dData={'X_train': self.X_train, 'y_train': Y_train, 'X_valid': self.X_validation, 'y_valid': Y_validation ,
-                                    'X_test': self.X_test, 'y_test': Y_test, 'patchSize': [self.patchSizeX, self.patchSizeY, self.patchSizeZ]},
-                             sModelIn=DeepLearningArtApp.deepNeuralNetworks[self.neuralNetworkModel],
-                             lTrain=cnn_main.RUN_CNN_TRAIN_TEST_VALIDATION,
-                             sParaOptim='',
-                             sOutPath=outPutFolderDataPath,
-                             iBatchSize=self.batchSizes,
-                             iLearningRate=self.learningRates,
-                             iEpochs=self.epochs,
-                             dlart_handle=self)
+        if iCase == 0:
+            iCase2 = 1
+            # just motion - one hot encoding
+            # segMasks = self.Y_segMasks_train == 1
+            # segMasks2 = self.Y_segMasks_train == 3
+
+            self.Y_segMasks_train[self.Y_segMasks_train == 3] = 1
+            self.Y_segMasks_train[self.Y_segMasks_train == 2] = 0
+
+            self.Y_segMasks_test[self.Y_segMasks_test == 3] = 1
+            self.Y_segMasks_test[self.Y_segMasks_test == 2] = 0
+
+            ##########################
+            ###########################
+            # for generating patch labels
+
+            y_labels_train = self.Y_segMasks_train
+            y_labels_train[y_labels_train == 0] = -1
+            y_labels_train[y_labels_train == 1] = 1
+            y_labels_train = np.sum( y_labels_train, axis=1 )
+            y_labels_train = np.sum( y_labels_train, axis=1 )
+            y_labels_train = np.sum( y_labels_train, axis=1 )
+            y_labels_train[y_labels_train >= 0] = 1
+            y_labels_train[y_labels_train < 0] = 0
+
+            for i in range( y_labels_train.shape[0] ):
+                Y_train.append( [1, 0] if y_labels_train[i] == 0 else [0, 1] )
+            Y_train = np.asarray( Y_train )
+
+            y_labels_test = self.Y_segMasks_test
+            y_labels_test[y_labels_test == 0] = -1
+            y_labels_test[y_labels_test == 1] = 1
+            y_labels_test = np.sum( y_labels_test, axis=1 )
+            y_labels_test = np.sum( y_labels_test, axis=1 )
+            y_labels_test = np.sum( y_labels_test, axis=1 )
+            y_labels_test[y_labels_test >= 0] = 1
+            y_labels_test[y_labels_test < 0] = 0
+
+            for i in range( y_labels_test.shape[0] ):
+                Y_test.append( [1, 0] if y_labels_test[i] == 0 else [0, 1] )
+
+            Y_validation = 0
+
+            # change the shape of the dataset -> at color channel -> here one for grey scale
+            # self.X_train = np.expand_dims( self.X_train, axis=-1 )
+
+            Y_segMasks_train_foreground = np.expand_dims( self.Y_segMasks_train, axis=-1 )
+            Y_segMasks_train_background = np.ones( Y_segMasks_train_foreground.shape ) - Y_segMasks_train_foreground
+            self.Y_segMasks_train = np.concatenate( (Y_segMasks_train_background, Y_segMasks_train_foreground),
+                                                    axis=-1 )
+
+            # self.X_test = np.expand_dims( self.X_test, axis=-1 )
+            Y_segMasks_test_foreground = np.expand_dims( self.Y_segMasks_test, axis=-1 )
+            Y_segMasks_test_background = np.ones( Y_segMasks_test_foreground.shape ) - Y_segMasks_test_foreground
+            self.Y_segMasks_test = np.concatenate( (Y_segMasks_test_background, Y_segMasks_test_foreground), axis=-1 )
+
+            if self.X_validation.size == 0 and self.Y_validation.size == 0:
+                self.X_validation = 0
+                self.Y_segMasks_validation = 0
+                self.Y_validation = 0
+                print( "No Validation Dataset." )
+            else:
+                self.Y_segMasks_validation[self.Y_segMasks_validation == 3] = 1
+                self.Y_segMasks_validation[self.Y_segMasks_validation == 2] = 0
+
+                # self.X_validation = np.expand_dims( self.X_validation, axis=-1 )
+                Y_segMasks_valid_foreground = np.expand_dims( self.Y_segMasks_validation, axis=-1 )
+                Y_segMasks_valid_background = np.ones( Y_segMasks_valid_foreground.shape ) - Y_segMasks_valid_foreground
+                self.Y_segMasks_validation = np.concatenate( (Y_segMasks_valid_background, Y_segMasks_valid_foreground),
+                                                        axis=-1 )
+
+            # everything - multi hot encoding
+        elif iCase == 1:
+            iCase2 = 0
+            # train
+            # self.X_train = np.expand_dims( self.X_train, axis=-1 )
+            self.Y_segMasks_train = np.expand_dims( self.Y_segMasks_train, axis=-1 )
+
+            Y_segMasks_train_background = self.Y_segMasks_train.copy()
+            Y_segMasks_train_background[Y_segMasks_train_background == 0] = 10
+            Y_segMasks_train_background[Y_segMasks_train_background == 1] = 0
+            Y_segMasks_train_background[Y_segMasks_train_background == 2] = 0
+            Y_segMasks_train_background[Y_segMasks_train_background == 3] = 0
+            Y_segMasks_train_background[Y_segMasks_train_background == 10] = 1
+
+            Y_segMasks_train_motion = self.Y_segMasks_train.copy()
+            Y_segMasks_train_motion[Y_segMasks_train_motion == 2] = 0
+            Y_segMasks_train_motion[Y_segMasks_train_motion == 3] = 1
+
+            Y_segMasks_train_shim = self.Y_segMasks_train.copy()
+            Y_segMasks_train_shim[Y_segMasks_train_shim == 1] = 0
+            Y_segMasks_train_shim[Y_segMasks_train_shim == 2] = 1
+            Y_segMasks_train_shim[Y_segMasks_train_shim == 3] = 1
+
+            self.Y_segMasks_train = np.concatenate(
+                (Y_segMasks_train_background, Y_segMasks_train_motion, Y_segMasks_train_shim), axis=-1 )
+
+            # test
+            # self.X_test = np.expand_dims( self.X_test, axis=-1 )
+            self.Y_segMasks_test = np.expand_dims( self.Y_segMasks_test, axis=-1 )
+
+            Y_segMasks_test_background = self.Y_segMasks_test.copy()
+            Y_segMasks_test_background[Y_segMasks_test_background == 0] = 1
+            Y_segMasks_test_background[Y_segMasks_test_background == 1] = 0
+            Y_segMasks_test_background[Y_segMasks_test_background == 2] = 0
+            Y_segMasks_test_background[Y_segMasks_test_background == 3] = 0
+
+            Y_segMasks_test_motion = self.Y_segMasks_test.copy()
+            Y_segMasks_test_motion[Y_segMasks_test_motion == 2] = 0
+            Y_segMasks_test_motion[Y_segMasks_test_motion == 3] = 1
+
+            Y_segMasks_test_shim = self.Y_segMasks_test.copy()
+            Y_segMasks_test_shim[Y_segMasks_test_shim == 1] = 0
+            Y_segMasks_test_shim[Y_segMasks_test_shim == 2] = 1
+            Y_segMasks_test_shim[Y_segMasks_test_shim == 3] = 1
+
+            self.Y_segMasks_test = np.concatenate(
+                (Y_segMasks_test_background, Y_segMasks_test_motion, Y_segMasks_test_shim), axis=-1 )
+
+            # validation check
+            if self.X_validation.size == 0 and self.Y_validation.size == 0:
+                self.X_validation = 0
+                self.Y_segMasks_validation = 0
+                self.Y_validation = 0
+                print( "No Validation Dataset." )
+            else:
+                # validation
+                # self.X_validation = np.expand_dims( self.X_validation, axis=-1 )
+                self.Y_segMasks_validation = np.expand_dims( self.Y_segMasks_validation, axis=-1 )
+
+                Y_segMasks_validation_background = self.Y_segMasks_validation.copy()
+                Y_segMasks_validation_background[Y_segMasks_validation_background == 0] = 1
+                Y_segMasks_validation_background[Y_segMasks_validation_background == 1] = 0
+                Y_segMasks_validation_background[Y_segMasks_validation_background == 2] = 0
+                Y_segMasks_validation_background[Y_segMasks_validation_background == 3] = 0
+
+                Y_segMasks_validation_motion = self.Y_segMasks_validation.copy()
+                Y_segMasks_validation_motion[Y_segMasks_validation_motion == 2] = 0
+                Y_segMasks_validation_motion[Y_segMasks_validation_motion == 3] = 1
+
+                Y_segMasks_validation_shim = self.Y_segMasks_validation.copy()
+                Y_segMasks_validation_shim[Y_segMasks_validation_shim == 1] = 0
+                Y_segMasks_validation_shim[Y_segMasks_validation_shim == 3] = 1
+
+                self.Y_segMasks_validation = np.concatenate(
+                    (Y_segMasks_validation_background, Y_segMasks_validation_motion, Y_segMasks_validation_shim),
+                    axis=-1 )
+
+            ##################################################################################################
+        #########################################################################################################
+        ################################################################################################################
+
+        # for i in range(self.X_train.shape[0]):
+        #
+        #     plt.subplot(141)
+        #     plt.imshow(self.X_train[i, :, :, 4, 0])
+        #
+        #     plt.subplot(142)
+        #     plt.imshow(self.Y_segMasks_train[i, :, :, 4, 0])
+        #
+        #     plt.subplot(143)
+        #     plt.imshow(self.Y_segMasks_train[i, :, :, 4, 1])
+        #
+        #     #plt.subplot(144)
+        #     #plt.imshow(self.Y_segMasks_train[i, :, :, 4, 2])
+        #
+        #     plt.show()
+        #
+        #     print(i)
+
+        ###################################################################################################################
+
+        if iCase2 == 0:
+
+            fRunCNN( dData={'X_train': self.X_train, 'y_train': Y_train, 'X_valid': self.X_validation,
+                            'y_valid': Y_validation, 'X_test': self.X_test, 'y_test': Y_test,
+                            'patchSize': [self.patchSizeX, self.patchSizeY, self.patchSizeZ]},
+                     sModelIn=DeepLearningArtApp.deepNeuralNetworks[self.neuralNetworkModel],
+                     lTrain=RUN_CNN_TRAIN_TEST_VALIDATION,
+                     sParaOptim='',
+                     sOutPath=outPutFolderDataPath,
+                     iBatchSize=self.batchSizes,
+                     iLearningRate=self.learningRates,
+                     iEpochs=self.epochs,
+                     dlart_handle=self )
         else:
             # segmentation FCN training
-            cnn_main.fRunCNN(dData={'X_train': self.X_train,
-                                    'y_train': Y_train,
-                                    'Y_segMasks_train': self.Y_segMasks_train,
-                                    'X_valid': self.X_validation,
-                                    'y_valid': Y_validation,
-                                    'Y_segMasks_validation': self.Y_segMasks_validation,
-                                    'X_test': self.X_test,
-                                    'y_test': Y_test,
-                                    'Y_segMasks_test': self.Y_segMasks_test,
-                                    'patchSize': [self.patchSizeX, self.patchSizeY, self.patchSizeZ]},
-                             sModelIn=DeepLearningArtApp.deepNeuralNetworks[self.neuralNetworkModel],
-                             lTrain=cnn_main.RUN_CNN_TRAIN_TEST_VALIDATION,
-                             sParaOptim='',
-                             sOutPath=outPutFolderDataPath,
-                             iBatchSize=self.batchSizes,
-                             iLearningRate=self.learningRates,
-                             iEpochs=self.epochs,
-                             dlart_handle=self,
-                             usingSegmentationMasks=self.usingSegmentationMasks)
 
+            fRunCNN( dData={'X_train': self.X_train,
+                            'y_train': Y_train,
+                            'Y_segMasks_train': self.Y_segMasks_train,
+                            'X_valid': self.X_validation,
+                            'y_valid': Y_validation,
+                            'Y_segMasks_validation': self.Y_segMasks_validation,
+                            'X_test': self.X_test,
+                            'y_test': Y_test,
+                            'Y_segMasks_test': self.Y_segMasks_test,
+                            'patchSize': [self.patchSizeX, self.patchSizeY, self.patchSizeZ]},
+                     sModelIn=DeepLearningArtApp.deepNeuralNetworks[self.neuralNetworkModel],
+                     lTrain=RUN_CNN_TRAIN_TEST_VALIDATION,
+                     sParaOptim='',
+                     sOutPath=outPutFolderDataPath,
+                     iBatchSize=self.batchSizes,
+                     iLearningRate=self.learningRates,
+                     iEpochs=self.epochs,
+                     dlart_handle=self,
+                     usingSegmentationMasks=self.usingSegmentationMasks )
+
+        # exit()
 
     def getAllDicomsPathList(self):
         '''
@@ -695,18 +880,18 @@ class DeepLearningArtApp():
         for patient in self.selectedPatients:
             for dataset in self.selectedDatasets:
                 curDataDir = self.pathDatabase + os.sep + patient + os.sep + self.modelSubDir + os.sep + dataset
-                if os.path.exists(curDataDir):  # check if path exists... especially for the dicom_sorted subdir!!!!!
-                    fileNames = tf.gfile.ListDirectory(curDataDir)
-                    fileNames = [os.path.join(curDataDir, f) for f in fileNames]
+                if os.path.exists( curDataDir ):  # check if path exists... especially for the dicom_sorted subdir!!!!!
+                    fileNames = tf.gfile.ListDirectory( curDataDir )
+                    fileNames = [os.path.join( curDataDir, f ) for f in fileNames]
                     allDicomsPathList = allDicomsPathList + fileNames
         return allDicomsPathList
 
     def create_cnn_training_summary(self, name, outputFolderPath):
         dataDict = {}
         dataDict['Name'] = name
-        dataDict['Date'] = datetime.datetime.today().strftime('%Y-%m-%d')
-        dataDict['BatchSize'] = ''.join(str(e) for e in self.batchSizes)
-        dataDict['LearningRate'] = ''.join(str(e) for e in self.learningRates)
+        dataDict['Date'] = datetime.datetime.today().strftime( '%Y-%m-%d' )
+        dataDict['BatchSize'] = ''.join( str( e ) for e in self.batchSizes )
+        dataDict['LearningRate'] = ''.join( str( e ) for e in self.learningRates )
         dataDict['DataAugmentation'] = self.dataAugmentationEnabled
         dataDict['HorizontalFlip'] = self.horizontalFlip
         dataDict['VerticalFlip'] = self.verticalFlip
@@ -730,21 +915,19 @@ class DeepLearningArtApp():
         dataDict['NesterovEnabled'] = self.nesterovEnabled
 
         dataDict['Dataset'] = self.datasetName
-        #dataDict['ClassMappings'] = self.classMappings
+        # dataDict['ClassMappings'] = self.classMappings
 
         # dict integer keys to strings
         classMappingsDict = {}
         for i in self.classMappings:
-            key = str(i)
+            key = str( i )
             val = self.classMappings[i]
             classMappingsDict[key] = val.tolist()
 
         dataDict['ClassMappings'] = classMappingsDict
 
-        with open((outputFolderPath+os.sep+'cnn_training_info.json'), 'w') as fp:
-            json.dump(dataDict, fp, indent=4)
-
-
+        with open( (outputFolderPath + os.sep + 'cnn_training_info.json'), 'w' ) as fp:
+            json.dump( dataDict, fp, indent=4 )
 
     def createDatasetInfoSummary(self, name, outputFolderPath):
         '''
@@ -754,7 +937,7 @@ class DeepLearningArtApp():
         '''
         dataDict = {}
         dataDict['Name'] = name
-        dataDict['Date'] = datetime.datetime.today().strftime('%Y-%m-%d')
+        dataDict['Date'] = datetime.datetime.today().strftime( '%Y-%m-%d' )
         dataDict['Patients'] = self.selectedPatients
         dataDict['Datasets'] = self.selectedDatasets
         dataDict['PatchMode'] = self.patchingMode
@@ -770,11 +953,11 @@ class DeepLearningArtApp():
         dataDict['StoreMode'] = self.storeMode
         dataDict['SegmentationMaskUsed'] = self.usingSegmentationMasks
 
-        with open((outputFolderPath+os.sep+'dataset_info.json'), 'w') as fp:
-            json.dump(dataDict, fp, indent=4)
+        with open( (outputFolderPath + os.sep + 'dataset_info.json'), 'w' ) as fp:
+            json.dump( dataDict, fp, indent=4 )
 
     def setLabelingMode(self, mode):
-        if mode == DeepLearningArtApp.MASK_LABELING or mode == DeepLearningArtApp.PATCH_LABELING:
+        if mode == MASK_LABELING or mode == PATCH_LABELING:
             self.labelingMode = mode
 
     def getLabelingMode(self):
@@ -835,7 +1018,7 @@ class DeepLearningArtApp():
         return self.selectedDatasets
 
     def setPatchingMode(self, mode):
-        if mode == DeepLearningArtApp.PATCHING_2D or mode == DeepLearningArtApp.PATCHING_3D:
+        if mode == PATCHING_2D or mode == PATCHING_3D:
             self.patchingMode = mode
 
     def getPatchingMode(self):
@@ -852,13 +1035,13 @@ class DeepLearningArtApp():
 
     def setStoreMode(self, mode):
         if mode == 0:
-            self.storeMode = DeepLearningArtApp.STORE_DISABLED
+            self.storeMode = STORE_DISABLED
         elif mode == 1:
-            self.storeMode = DeepLearningArtApp.STORE_HDF5
+            self.storeMode = STORE_HDF5
         elif mode == 2:
-            self.storeMode = DeepLearningArtApp.STORE_PATCH_BASED
+            self.storeMode = STORE_PATCH_BASED
         else:
-            raise ValueError('Unknown store mode!!!')
+            raise ValueError( 'Unknown store mode!!!' )
 
     def getTrainTestDatasetRatio(self):
         '''
@@ -871,7 +1054,7 @@ class DeepLearningArtApp():
         if 0 <= ratio <= 1:
             self.trainTestDatasetRatio = ratio
         else:
-            raise ValueError('Splitting ratio train set, test set too big or too small!')
+            raise ValueError( 'Splitting ratio train set, test set too big or too small!' )
 
     def getTrainValidationRatio(self):
         '''
@@ -884,7 +1067,7 @@ class DeepLearningArtApp():
         if 0 <= ratio < 1:
             self.trainValidationRatio = ratio
         else:
-            raise ValueError('Splitting ratio train, validation on training set is too big or too small!')
+            raise ValueError( 'Splitting ratio train, validation on training set is too big or too small!' )
 
     def setSplittingMode(self, mode):
         self.splittingMode = mode
@@ -984,7 +1167,7 @@ class DeepLearningArtApp():
 
     def setRotation(self, b):
         if b:
-            self.rotation = DeepLearningArtApp.ROTATION_RANGE
+            self.rotation = ROTATION_RANGE
         else:
             self.rotation = 0
 
@@ -999,7 +1182,7 @@ class DeepLearningArtApp():
 
     def setHeightShift(self, b):
         if b:
-            self.heightShift = DeepLearningArtApp.HEIGHT_SHIFT_RANGE
+            self.heightShift = HEIGHT_SHIFT_RANGE
         else:
             self.heightShift = 0
 
@@ -1008,7 +1191,7 @@ class DeepLearningArtApp():
 
     def setWidthShift(self, b):
         if b:
-            self.widthShift = DeepLearningArtApp.WIDTH_SHIFT_RANGE
+            self.widthShift = WIDTH_SHIFT_RANGE
         else:
             self.widthShift = 0
 
@@ -1017,7 +1200,7 @@ class DeepLearningArtApp():
 
     def setZoom(self, r):
         if r:
-            self.zoom = DeepLearningArtApp.ZOOM_RANGE
+            self.zoom = ZOOM_RANGE
         else:
             self.zoom = 0
 
@@ -1064,16 +1247,17 @@ class DeepLearningArtApp():
         return self.unpatched_slices
 
     def livePlotTrainingPerformance(self, train_acc, val_acc, train_loss, val_loss):
-        curEpoch = len(train_acc)
-        progress = np.around(curEpoch/self.epochs*100, decimals=0)
-        progress = int(progress)
+        curEpoch = len( train_acc )
+        progress = np.around( curEpoch / self.epochs * 100, decimals=0 )
+        progress = int( progress )
 
-        self.updateProgressBarTraining(progress)
-        self.dlart_GUI_handle.plotTrainingLivePerformance(train_acc=train_acc, val_acc=val_acc, train_loss=train_loss, val_loss=val_loss)
+        self.updateProgressBarTraining( progress )
+        self.dlart_GUI_handle.plotTrainingLivePerformance( train_acc=train_acc, val_acc=val_acc, train_loss=train_loss,
+                                                           val_loss=val_loss )
 
     def datasetAvailable(self):
         retbool = False
-        if self.storeMode != DeepLearningArtApp.STORE_PATCH_BASED:
+        if self.storeMode != STORE_PATCH_BASED:
             if self.X_train is not None and self.X_validation is not None \
                     and self.X_test is not None and self.Y_train is not None \
                     and self.Y_validation is not None and self.Y_test.all is not None:
@@ -1081,7 +1265,7 @@ class DeepLearningArtApp():
         return retbool
 
     def updateProgressBarTraining(self, val):
-        self.dlart_GUI_handle.updateProgressBarTraining(val)
+        self.dlart_GUI_handle.updateProgressBarTraining( val )
 
     def loadDataset(self, pathToDataset):
         '''
@@ -1090,38 +1274,37 @@ class DeepLearningArtApp():
         :return: boolean if loading was successful, and name of loaded dataset
         '''
         retbool = False
-        #check for data info summary in json file
+        # check for data info summary in json file
         try:
-            with open(pathToDataset + os.sep + "dataset_info.json", 'r') as fp:
-                dataset_info = json.load(fp)
+            with open( pathToDataset + os.sep + "dataset_info.json", 'r' ) as fp:
+                dataset_info = json.load( fp )
 
             # hd5f or patch based?
-            if dataset_info['StoreMode'] == DeepLearningArtApp.STORE_HDF5:
+            if dataset_info['StoreMode'] == STORE_HDF5:
                 # loading hdf5
                 self.datasetName = dataset_info['Name']
-                self.patchSizeX = int(dataset_info['PatchSizeX'])
-                self.patchSizeY = int(dataset_info['PatchSizeY'])
-                self.patchSizeZ = int(dataset_info['PatchSizeZ'])
-                self.patchOverlapp = float(dataset_info['PatchOverlap'])
-                self.patchingMode = int(dataset_info['PatchMode'])
-                self.labelingMode = int(dataset_info['LabelingMode'])
-                self.splittingMode = int(dataset_info['SplittingMode'])
-                self.trainTestDatasetRatio = float(dataset_info['TrainTestRatio'])
-                self.trainValidationRatio = float(dataset_info['TrainValidationRatio'])
-                self.numFolds = int(dataset_info['NumFolds'])
+                self.patchSizeX = int( dataset_info['PatchSizeX'] )
+                self.patchSizeY = int( dataset_info['PatchSizeY'] )
+                self.patchSizeZ = int( dataset_info['PatchSizeZ'] )
+                self.patchOverlapp = float( dataset_info['PatchOverlap'] )
+                self.patchingMode = int( dataset_info['PatchMode'] )
+                self.labelingMode = int( dataset_info['LabelingMode'] )
+                self.splittingMode = int( dataset_info['SplittingMode'] )
+                self.trainTestDatasetRatio = float( dataset_info['TrainTestRatio'] )
+                self.trainValidationRatio = float( dataset_info['TrainValidationRatio'] )
+                self.numFolds = int( dataset_info['NumFolds'] )
 
                 if 'ClassMappings' in dataset_info:
                     self.classMappings = dataset_info['ClassMappings']
 
                 if 'SegmentationMaskUsed' in dataset_info:
-                    self.usingSegmentationMasks = bool(dataset_info['SegmentationMaskUsed'])
+                    self.usingSegmentationMasks = bool( dataset_info['SegmentationMaskUsed'] )
                 else:
                     self.usingSegmentationMasks = False
 
-
                 # loading hdf5 dataset
                 try:
-                    with h5py.File(pathToDataset + os.sep + "datasets.hdf5", 'r') as hf:
+                    with h5py.File( pathToDataset + os.sep + "datasets.hdf5", 'r' ) as hf:
                         self.X_train = hf['X_train'][:]
                         self.X_validation = hf['X_validation'][:]
                         self.X_test = hf['X_test'][:]
@@ -1135,18 +1318,18 @@ class DeepLearningArtApp():
 
                     retbool = True
                 except:
-                    raise TypeError("Can't read HDF5 dataset!")
+                    raise TypeError( "Can't read HDF5 dataset!" )
 
-            elif dataset_info['StoreMode'] == DeepLearningArtApp.STORE_PATCH_BASED:
-                #loading patchbased stuff
+            elif dataset_info['StoreMode'] == STORE_PATCH_BASED:
+                # loading patchbased stuff
                 self.datasetName = dataset_info['Name']
 
-                print("still in progrss")
+                print( "still in progrss" )
             else:
-                raise NameError("No such store Mode known!")
+                raise NameError( "No such store Mode known!" )
 
         except:
-            raise FileNotFoundError("Error: Something went wrong at trying to load the dataset!!!")
+            raise FileNotFoundError( "Error: Something went wrong at trying to load the dataset!!!" )
 
         return retbool, self.datasetName
 
@@ -1208,13 +1391,13 @@ class DeepLearningArtApp():
             :return: returns boolean. If prediction was successfull then true is returned else false.
         '''
         # set GPU
-        os.environ["CUDA_VISIBLE_DEVICES"] = str(self.gpu_prediction_id)
+        os.environ["CUDA_VISIBLE_DEVICES"] = str( self.gpu_prediction_id )
 
         # load dataset for prediction
         # check for data info summary in json file
         try:
-            with open(self.datasetForPrediction + os.sep + "dataset_info.json", 'r') as fp:
-                dataset_info = json.load(fp)
+            with open( self.datasetForPrediction + os.sep + "dataset_info.json", 'r' ) as fp:
+                dataset_info = json.load( fp )
 
             patchOverlap = dataset_info['PatchOverlap']
             patientsOfDataset = dataset_info['Patients']
@@ -1224,16 +1407,16 @@ class DeepLearningArtApp():
                 datasetForUnpatching = datasetForUnpatching[0]
 
             # hd5f or patch based?
-            if dataset_info['StoreMode'] == DeepLearningArtApp.STORE_HDF5:
+            if dataset_info['StoreMode'] == STORE_HDF5:
                 # loading hdf5
                 try:
-                    self.usingSegmentationMasksForPrediction = bool(dataset_info['SegmentationMaskUsed'])
+                    self.usingSegmentationMasksForPrediction = bool( dataset_info['SegmentationMaskUsed'] )
                 except:
                     self.usingSegmentationMasksForPrediction = False
 
                 # loading hdf5 dataset
                 try:
-                    with h5py.File(self.datasetForPrediction + os.sep + "datasets.hdf5", 'r') as hf:
+                    with h5py.File( self.datasetForPrediction + os.sep + "datasets.hdf5", 'r' ) as hf:
                         X_train = hf['X_train'][:]
                         X_validation = hf['X_validation'][:]
                         X_test = hf['X_test'][:]
@@ -1245,20 +1428,33 @@ class DeepLearningArtApp():
                             Y_segMasks_validation = hf['Y_segMasks_validation'][:]
                             Y_segMasks_test = hf['Y_segMasks_test'][:]
                 except:
-                    raise TypeError("Can't read HDF5 dataset!")
+                    raise TypeError( "Can't read HDF5 dataset!" )
             else:
-                raise NameError("No such store Mode known!")
+                raise NameError( "No such store Mode known!" )
         except:
-            raise FileNotFoundError("Error: Something went wrong at trying to load the dataset!!!")
+            raise FileNotFoundError( "Error: Something went wrong at trying to load the dataset!!!" )
 
+        y_labels_test = Y_segMasks_test
+        y_labels_test[y_labels_test == 0] = -1
+        y_labels_test[y_labels_test == 1] = 1
+
+        y_labels_test = np.sum( y_labels_test, axis=1 )
+        y_labels_test = np.sum( y_labels_test, axis=1 )
+        y_labels_test = np.sum( y_labels_test, axis=1 )
+        y_labels_test[y_labels_test >= 0] = 1
+        y_labels_test[y_labels_test < 0] = 0
+
+        Y_test = []
+        for i in range( y_labels_test.shape[0] ):
+            Y_test.append( [1, 0] if y_labels_test[i] == 0 else [0, 1] )
 
         #
         # dynamic loading of corresponding model
-        with open(self.modelForPrediction + os.sep + "cnn_training_info.json", 'r') as fp:
-            cnn_info = json.load(fp)
+        with open( self.modelForPrediction + os.sep + "cnn_training_info.json", 'r' ) as fp:
+            cnn_info = json.load( fp )
 
         sModel = DeepLearningArtApp.deepNeuralNetworks[cnn_info['Name']]
-        batchSize = int(cnn_info['BatchSize'])
+        batchSize = int( cnn_info['BatchSize'] )
         usingArtifacts = cnn_info['Artifacts']
         usingBodyRegions = cnn_info['BodyRegions']
         usingTWeighting = cnn_info['TWeightings']
@@ -1267,43 +1463,44 @@ class DeepLearningArtApp():
         if 'ClassMappings' in cnn_info:
             self.classMappingsForPrediction = cnn_info['ClassMappings']
 
-            #convert string keys to int keys
+            # convert string keys to int keys
             intKeysDict = {}
             for stringKey in self.classMappingsForPrediction:
-                intKeysDict[int(stringKey)] = self.classMappingsForPrediction[stringKey]
+                intKeysDict[int( stringKey )] = self.classMappingsForPrediction[stringKey]
             self.classMappingsForPrediction = intKeysDict
 
         else:
             # in old code version no class mappings were stored in cnn_info. so we have to recreate the class mappings
             # out of the original training dataset
-            with h5py.File(self.pathOutputPatching + os.sep + cnn_info['Dataset'] + os.sep + "datasets.hdf5", 'r') as hf:
+            with h5py.File( self.pathOutputPatching + os.sep + cnn_info['Dataset'] + os.sep + "datasets.hdf5",
+                            'r' ) as hf:
                 Y_train_original = hf['Y_test'][:]
 
-            classes = np.asarray(np.unique(Y_train_original, ), dtype=int)
-            self.classMappingsForPrediction = Label.mapClassesToOutputVector(classes=classes,
-                                                                usingArtefacts=usingArtifacts,
-                                                                usingBodyRegion=usingBodyRegions,
-                                                                usingTWeightings=usingTWeighting)
+            classes = np.asarray( np.unique( Y_train_original, ), dtype=int )
+            self.classMappingsForPrediction = Label.mapClassesToOutputVector( classes=classes,
+                                                                              usingArtefacts=usingArtifacts,
+                                                                              usingBodyRegion=usingBodyRegions,
+                                                                              usingTWeightings=usingTWeighting )
 
         if self.doUnpatching:
-            classLabel = int(DeepLearningArtApp.datasets[datasetForUnpatching].getDatasetLabel())
+            classLabel = int( DeepLearningArtApp.datasets[datasetForUnpatching].getDatasetLabel() )
 
-        Y = []
-        for i in range(Y_train.shape[0]):
-            Y.append(self.classMappingsForPrediction[Y_train[i]])
-        Y_train = np.asarray(Y)
-
-        Y= []
-        for i in range(Y_validation.shape[0]):
-            Y.append(self.classMappingsForPrediction[Y_validation[i]])
-        Y_validation = np.asarray(Y)
-
-        Y = []
-        for i in range(Y_test.shape[0]):
-            Y.append(self.classMappingsForPrediction[Y_test[i]])
-            if Y_test[i] == 232:
-                print()
-        Y_test = np.asarray(Y)
+        # Y = []
+        # for i in range(Y_train.shape[0]):
+        #     Y.append(self.classMappingsForPrediction[Y_train[i]])
+        # Y_train = np.asarray(Y)
+        #
+        # Y= []
+        # for i in range(Y_validation.shape[0]):
+        #     Y.append(self.classMappingsForPrediction[Y_validation[i]])
+        # Y_validation = np.asarray(Y)
+        #
+        # Y = []
+        # for i in range(Y_test.shape[0]):
+        #     Y.append(self.classMappingsForPrediction[int(Y_test[i])])
+        #     if Y_test[i] == 232:
+        #         print()
+        # Y_test = np.asarray(Y)
 
         # Y = np.zeros((Y_test.shape[0], 11))
         # for i in range(Y_test.shape[0]):
@@ -1312,130 +1509,148 @@ class DeepLearningArtApp():
         # Y_test=Y
 
         # import cnn model
-        cnnModel = __import__(sModel, globals(), locals(), ['createModel', 'fTrain', 'fPredict'], 0)
+        cnnModel = __import__( sModel, globals(), locals(), ['createModel', 'fTrain', 'fPredict'], 0 )
 
+        self.usingSegmentationMasksForPrediction = True
 
         if self.usingSegmentationMasksForPrediction:
 
-            usingClassification = True
+            usingClassification = False
 
-            predictions = predict_segmentation_model(X_test,
+            predictions = predict_segmentation_model( X_test,
                                                       Y_test,
                                                       Y_segMasks_test,
                                                       sModelPath=self.modelForPrediction,
                                                       batch_size=batchSize,
-                                                      usingClassification=usingClassification)
+                                                      usingClassification=usingClassification )
 
             # do unpatching if is enabled
             if self.doUnpatching:
 
-                 patchSize = [X_test.shape[1], X_test.shape[2], X_test.shape[3]]
+                patchSize = [X_test.shape[1], X_test.shape[2], X_test.shape[3]]
 
-                 # load corresponding original dataset
-                 for i in DeepLearningArtApp.datasets:
-                     set = DeepLearningArtApp.datasets[i]
-                     if set.getDatasetLabel() == classLabel:
-                         originalDatasetName = set.getPathdata()
+                # load corresponding original dataset
+                for i in DeepLearningArtApp.datasets:
+                    set = DeepLearningArtApp.datasets[i]
+                    if set.getDatasetLabel() == classLabel:
+                        originalDatasetName = set.getPathdata()
 
-                 pathToOriginalDataset = self.getPathToDatabase() + os.sep + str(
-                     patientsOfDataset[0]) + os.sep + 'dicom_sorted' + os.sep + originalDatasetName
-                 fileNames = os.listdir(pathToOriginalDataset)
-                 fileNames = [os.path.join(pathToOriginalDataset, f) for f in fileNames]
+                pathToOriginalDataset = self.getPathToDatabase() + os.sep + str(
+                    patientsOfDataset[0] ) + os.sep + 'dicom_sorted' + os.sep + originalDatasetName
+                fileNames = os.listdir( pathToOriginalDataset )
+                fileNames = [os.path.join( pathToOriginalDataset, f ) for f in fileNames]
 
-                 # read DICOMS
-                 dicomDataset = [dicom.read_file(f) for f in fileNames]
+                # read DICOMS
+                dicomDataset = [dicom.read_file( f ) for f in fileNames]
 
-                 # Combine DICOM Slices to a single 3D image (voxel)
-                 try:
-                     voxel_ndarray, ijk_to_xyz = dicom_np.combine_slices(dicomDataset)
-                     voxel_ndarray = voxel_ndarray.astype(float)
-                     voxel_ndarray = np.swapaxes(voxel_ndarray, 0, 1)
-                 except dicom_np.DicomImportException as e:
-                     # invalid DICOM data
-                     raise
+                # Combine DICOM Slices to a single 3D image (voxel)
+                try:
+                    voxel_ndarray, ijk_to_xyz = dicom_np.combine_slices( dicomDataset )
+                    voxel_ndarray = voxel_ndarray.astype( float )
+                    voxel_ndarray = np.swapaxes( voxel_ndarray, 0, 1 )
+                except dicom_np.DicomImportException as e:
+                    # invalid DICOM data
+                    raise
 
-                 # load dicom mask
-                 currentMarkingsPath = self.getMarkingsPath() + os.sep + str(patientsOfDataset[0]) + ".json"
-                 # get the markings mask
-                 labelMask_ndarray = create_MASK_Array(currentMarkingsPath,
+                # sort array
+                newnparray = np.zeros( shape=voxel_ndarray.shape )
+                for i in range( voxel_ndarray.shape[-1] ):
+                    newnparray[:, :, voxel_ndarray.shape[-1] - 1 - i] = voxel_ndarray[:, :, i]
+
+                voxel_ndarray = newnparray
+
+                # load dicom mask
+                currentMarkingsPath = self.getMarkingsPath() + os.sep + str( patientsOfDataset[0] ) + ".json"
+                # get the markings mask
+                labelMask_ndarray = create_MASK_Array( currentMarkingsPath,
                                                        patientsOfDataset[0],
                                                        originalDatasetName,
                                                        voxel_ndarray.shape[0],
                                                        voxel_ndarray.shape[1],
-                                                       voxel_ndarray.shape[2])
+                                                       voxel_ndarray.shape[2] )
 
-                 dicom_size = [voxel_ndarray.shape[0], voxel_ndarray.shape[1], voxel_ndarray.shape[2]]
+                dicom_size = [voxel_ndarray.shape[0], voxel_ndarray.shape[1], voxel_ndarray.shape[2]]
 
-                 allPreds = predictions['prob_pre']
+                allPreds = predictions['prob_pre']
 
-                 unpatched_img_foreground = fUnpatchSegmentation(allPreds[0],
+                unpatched_img_foreground = fUnpatchSegmentation( allPreds,
                                                                  patchSize=patchSize,
                                                                  patchOverlap=patchOverlap,
                                                                  actualSize=dicom_size,
-                                                                 iClass=1)
-                 unpatched_img_background = fUnpatchSegmentation(allPreds[0],
+                                                                 iClass=1 )
+                unpatched_img_background = fUnpatchSegmentation( allPreds,
                                                                  patchSize=patchSize,
                                                                  patchOverlap=patchOverlap,
                                                                  actualSize=dicom_size,
-                                                                 iClass=0)
+                                                                 iClass=0 )
 
-                 ones = np.ones((unpatched_img_background.shape[0], unpatched_img_background.shape[1],
-                                 unpatched_img_background.shape[2]))
-                 preds = np.divide(np.add(np.subtract(ones,unpatched_img_background), unpatched_img_foreground), 2)
+                ones = np.ones( (unpatched_img_background.shape[0], unpatched_img_background.shape[1],
+                                 unpatched_img_background.shape[2]) )
+                preds = np.divide( np.add( np.subtract( ones, unpatched_img_background ), unpatched_img_foreground ),
+                                   2 )
 
-                 preds = preds > 0.5
-                 unpatched_img_mask = np.zeros((unpatched_img_background.shape[0], unpatched_img_background.shape[1], unpatched_img_background.shape[2]))
-                 unpatched_img_mask[preds] = unpatched_img_mask[preds] + 1
+                preds = preds > 0.5
+                unpatched_img_mask = np.zeros( (unpatched_img_background.shape[0], unpatched_img_background.shape[1],
+                                                unpatched_img_background.shape[2]) )
+                unpatched_img_mask[preds] = unpatched_img_mask[preds] + 1
 
-                 # unpatched_img_mask = fUnpatchSegmentation(preds,
-                 #                                           patchSize=patchSize,
-                 #                                           patchOverlap=patchOverlap,
-                 #                                           actualSize=dicom_size,
-                 #                                           iClass=1000)
+                # unpatched_img_mask = fUnpatchSegmentation(preds,
+                #                                           patchSize=patchSize,
+                #                                           patchOverlap=patchOverlap,
+                #                                           actualSize=dicom_size,
+                #                                           iClass=1000)
 
-                 self.unpatched_slices = {
-                     'probability_mask_foreground': unpatched_img_foreground,
-                     'probability_mask_background': unpatched_img_background,
-                     'predicted_segmentation_mask': unpatched_img_mask,
-                     'dicom_slices': voxel_ndarray,
-                     'dicom_masks': labelMask_ndarray,
+                self.unpatched_slices = {
+                    'probability_mask_foreground': unpatched_img_foreground,
+                    'probability_mask_background': unpatched_img_background,
+                    'predicted_segmentation_mask': unpatched_img_mask,
+                    'dicom_slices': voxel_ndarray,
+                    'dicom_masks': labelMask_ndarray,
 
-                 }
+                }
 
             if usingClassification:
                 # save prediction into .mat file
                 modelSave = self.modelForPrediction + os.sep + 'model_predictions.mat'
-                print('saving Model:{}'.format(modelSave))
+                print( 'saving Model:{}'.format( modelSave ) )
 
                 if not self.doUnpatching:
                     allPreds = predictions['prob_pre']
-                    sio.savemat(modelSave, {'prob_pre': allPreds[0],
-                                            'Y_test': Y_test,
-                                            'classification_prob_pre': allPreds[1],
-                                            'loss_test': predictions['loss_test'],
-                                            'segmentation_output_loss_test': predictions['segmentation_output_loss_test'],
-                                            'classification_output_loss_test': predictions['classification_output_loss_test'],
-                                            'segmentation_output_dice_coef': predictions['segmentation_output_dice_coef_test'],
-                                            'classification_output_acc_test': predictions['classification_output_acc_test']
-                                            })
+                    sio.savemat( modelSave, {'prob_pre': allPreds[0],
+                                             'Y_test': Y_test,
+                                             'classification_prob_pre': allPreds[1],
+                                             'loss_test': predictions['loss_test'],
+                                             'segmentation_output_loss_test': predictions[
+                                                 'segmentation_output_loss_test'],
+                                             'classification_output_loss_test': predictions[
+                                                 'classification_output_loss_test'],
+                                             'segmentation_output_dice_coef': predictions[
+                                                 'segmentation_output_dice_coef_test'],
+                                             'classification_output_acc_test': predictions[
+                                                 'classification_output_acc_test']
+                                             } )
                 else:
-                    sio.savemat(modelSave, {'prob_pre': allPreds[0],
-                                            'Y_test': Y_test,
-                                            'classification_prob_pre': allPreds[1],
-                                            'loss_test': predictions['loss_test'],
-                                            'segmentation_output_loss_test': predictions['segmentation_output_loss_test'],
-                                            'classification_output_loss_test': predictions['classification_output_loss_test'],
-                                            'segmentation_output_dice_coef_test': predictions['segmentation_output_dice_coef_test'],
-                                            'classification_output_acc_test': predictions['classification_output_acc_test'],
-                                            'unpatched_slices': self.unpatched_slices
-                                            })
+                    sio.savemat( modelSave, {'prob_pre': allPreds[0],
+                                             'Y_test': Y_test,
+                                             'classification_prob_pre': allPreds[1],
+                                             'loss_test': predictions['loss_test'],
+                                             'segmentation_output_loss_test': predictions[
+                                                 'segmentation_output_loss_test'],
+                                             'classification_output_loss_test': predictions[
+                                                 'classification_output_loss_test'],
+                                             'segmentation_output_dice_coef_test': predictions[
+                                                 'segmentation_output_dice_coef_test'],
+                                             'classification_output_acc_test': predictions[
+                                                 'classification_output_acc_test'],
+                                             'unpatched_slices': self.unpatched_slices
+                                             } )
 
                 # load training results
-                _, sPath = os.path.splitdrive(self.modelForPrediction)
-                sPath, sFilename = os.path.split(sPath)
-                sFilename, sExt = os.path.splitext(sFilename)
+                _, sPath = os.path.splitdrive( self.modelForPrediction )
+                sPath, sFilename = os.path.split( sPath )
+                sFilename, sExt = os.path.splitext( sFilename )
 
-                training_results = sio.loadmat(self.modelForPrediction + os.sep + sFilename + ".mat")
+                training_results = sio.loadmat( self.modelForPrediction + os.sep + sFilename + ".mat" )
                 self.acc_training = training_results['segmentation_output_dice_coef_training']
                 self.acc_validation = training_results['segmentation_output_dice_coef_val']
                 self.acc_test = training_results['segmentation_output_dice_coef_test']
@@ -1443,65 +1658,63 @@ class DeepLearningArtApp():
             else:
                 # save prediction into .mat file
                 modelSave = self.modelForPrediction + os.sep + 'model_predictions.mat'
-                print('saving Model:{}'.format(modelSave))
+                print( 'saving Model:{}'.format( modelSave ) )
                 if not self.doUnpatching:
-                     sio.savemat(modelSave, {'prob_pre': predictions['prob_pre'],
+                    sio.savemat( modelSave, {'prob_pre': predictions['prob_pre'],
                                              'score_test': predictions['score_test'],
                                              'acc_test': predictions['acc_test'],
-                                             })
+                                             } )
                 else:
-                     sio.savemat(modelSave, {'prob_pre': predictions['prob_pre'],
+                    sio.savemat( modelSave, {'prob_pre': predictions['prob_pre'],
                                              'score_test': predictions['score_test'],
                                              'acc_test': predictions['acc_test'],
                                              'unpatched_slices': self.unpatched_slices
-                                             })
+                                             } )
 
                 # load training results
-                _, sPath = os.path.splitdrive(self.modelForPrediction)
-                sPath, sFilename = os.path.split(sPath)
-                sFilename, sExt = os.path.splitext(sFilename)
+                _, sPath = os.path.splitdrive( self.modelForPrediction )
+                sPath, sFilename = os.path.split( sPath )
+                sFilename, sExt = os.path.splitext( sFilename )
 
-                training_results = sio.loadmat(self.modelForPrediction + os.sep + sFilename + ".mat")
+                training_results = sio.loadmat( self.modelForPrediction + os.sep + sFilename + ".mat" )
                 self.acc_training = training_results['dice_coef']
                 self.acc_validation = training_results['val_dice_coef']
-                self.acc_test = training_results['acc_test']
+                self.acc_test = training_results['dice_coef_test']
 
 
         else:
 
-            prediction = predict_model(X_test,
-                                       Y_test,
-                                       sModelPath=self.modelForPrediction,
-                                       batch_size=batchSize,
-                                       classMappings=self.classMappingsForPrediction)
+            prediction = predict_model( X_test,
+                                        Y_test,
+                                        sModelPath=self.modelForPrediction,
+                                        batch_size=batchSize,
+                                        classMappings=self.classMappingsForPrediction )
 
             self.predictions = prediction['predictions']
             self.confusionMatrix = prediction['confusion_matrix']
             self.classificationReport = prediction['classification_report']
 
             #################################
-            #path = 'D:/med_data/MRPhysics/MA Results/Output_Learning-9.3.18/Multiclass SE-ResNet-56_2D_64x64_2018-03-07_11-48/model_predictions.mat'
-            #mat = sio.loadmat(path)
-            #self.confusionMatrix = mat['confusion_matrix']
-            #self.classificationReport = mat['classification_report']
+            # path = 'D:/med_data/MRPhysics/MA Results/Output_Learning-9.3.18/Multiclass SE-ResNet-56_2D_64x64_2018-03-07_11-48/model_predictions.mat'
+            # mat = sio.loadmat(path)
+            # self.confusionMatrix = mat['confusion_matrix']
+            # self.classificationReport = mat['classification_report']
             ############################################################
 
-
             # organize confusion matrix
-            sum_all = np.array(np.sum(self.confusionMatrix, axis=0))
-            all = np.zeros((len(sum_all), len(sum_all)))
-            for i in range(all.shape[0]):
+            sum_all = np.array( np.sum( self.confusionMatrix, axis=0 ) )
+            all = np.zeros( (len( sum_all ), len( sum_all )) )
+            for i in range( all.shape[0] ):
                 all[i, :] = sum_all
-            self.confusionMatrix = np.divide(self.confusionMatrix, all)
-
+            self.confusionMatrix = np.divide( self.confusionMatrix, all )
 
             # do unpatching if is enabled
             if self.doUnpatching:
 
-                patchSize = [X_test.shape[1], X_test.shape[2]]
+                patchSize = [X_test.shape[1], X_test.shape[2], X_test.shape[3]]
                 classVec = self.classMappingsForPrediction[classLabel]
-                classVec = np.asarray(classVec, dtype=np.int32)
-                iClass = np.where(classVec == 1)
+                classVec = np.asarray( classVec, dtype=np.int32 )
+                iClass = np.where( classVec == 1 )
                 iClass = iClass[0]
 
                 # load corresponding original dataset
@@ -1510,31 +1723,39 @@ class DeepLearningArtApp():
                     if set.getDatasetLabel() == classLabel:
                         originalDatasetName = set.getPathdata()
 
-                pathToOriginalDataset = self.getPathToDatabase() + os.sep + str(patientsOfDataset[0]) + os.sep + 'dicom_sorted' + os.sep + originalDatasetName
-                fileNames = os.listdir(pathToOriginalDataset)
-                fileNames = [os.path.join(pathToOriginalDataset, f) for f in fileNames]
+                pathToOriginalDataset = self.getPathToDatabase() + os.sep + str(
+                    patientsOfDataset[0] ) + os.sep + 'dicom_sorted' + os.sep + originalDatasetName
+                fileNames = os.listdir( pathToOriginalDataset )
+                fileNames = [os.path.join( pathToOriginalDataset, f ) for f in fileNames]
 
                 # read DICOMS
-                dicomDataset = [dicom.read_file(f) for f in fileNames]
+                dicomDataset = [dicom.read_file( f ) for f in fileNames]
 
                 # Combine DICOM Slices to a single 3D image (voxel)
                 try:
-                    voxel_ndarray, ijk_to_xyz = dicom_np.combine_slices(dicomDataset)
-                    voxel_ndarray = voxel_ndarray.astype(float)
-                    voxel_ndarray = np.swapaxes(voxel_ndarray, 0, 1)
+                    voxel_ndarray, ijk_to_xyz = dicom_np.combine_slices( dicomDataset )
+                    voxel_ndarray = voxel_ndarray.astype( float )
+                    voxel_ndarray = np.swapaxes( voxel_ndarray, 0, 1 )
                 except dicom_np.DicomImportException as e:
                     # invalid DICOM data
                     raise
 
+                # sort array
+                newnparray = np.zeros( shape=voxel_ndarray.shape )
+                for i in range( voxel_ndarray.shape[-1] ):
+                    newnparray[:, :, voxel_ndarray.shape[-1] - 1 - i] = voxel_ndarray[:, :, i]
+
+                voxel_ndarray = newnparray
+
                 # load dicom mask
-                currentMarkingsPath = self.getMarkingsPath() + os.sep + str(patientsOfDataset[0]) + ".json"
+                currentMarkingsPath = self.getMarkingsPath() + os.sep + str( patientsOfDataset[0] ) + ".json"
                 # get the markings mask
-                labelMask_ndarray = create_MASK_Array(currentMarkingsPath,
-                                                      patientsOfDataset[0],
-                                                      originalDatasetName,
-                                                      voxel_ndarray.shape[0],
-                                                      voxel_ndarray.shape[1],
-                                                      voxel_ndarray.shape[2])
+                labelMask_ndarray = create_MASK_Array( currentMarkingsPath,
+                                                       patientsOfDataset[0],
+                                                       originalDatasetName,
+                                                       voxel_ndarray.shape[0],
+                                                       voxel_ndarray.shape[1],
+                                                       voxel_ndarray.shape[2] )
 
                 dicom_size = [voxel_ndarray.shape[0], voxel_ndarray.shape[1], voxel_ndarray.shape[2]]
 
@@ -1544,85 +1765,90 @@ class DeepLearningArtApp():
                 #                               dicom_size,
                 #                               iClass=iClass)
 
-                multiclass_probability_masks = fMulticlassUnpatch2D(self.predictions,
-                                                                     patchSize,
-                                                                     patchOverlap,
-                                                                     dicom_size)
+                if len( patchSize ) == 2:
+                    multiclass_probability_masks = fMulticlassUnpatch2D( self.predictions,
+                                                                         patchSize,
+                                                                         patchOverlap,
+                                                                         dicom_size )
 
+                if len( patchSize ) == 3:
+                    multiclass_probability_masks = fUnpatch3D( self.predictions,
+                                                               patchSize,
+                                                               patchOverlap,
+                                                               dicom_size )
 
                 ########################################################################################################
                 # Hatching and colors multicalss unpatching
                 prob_test = self.predictions
 
+                IArte = []
+                IType = []
+
                 if prob_test.shape[1] == 11:
-                    IndexType = np.argmax(prob_test, 1)
+                    IndexType = np.argmax( prob_test, 1 )
                     IndexType[IndexType == 0] = 1
                     IndexType[(IndexType > 1) & (IndexType < 4)] = 2
                     IndexType[(IndexType > 3) & (IndexType < 6)] = 3
                     IndexType[(IndexType > 5) & (IndexType < 8)] = 4
                     IndexType[IndexType > 7] = 5
 
-                    a = Counter(IndexType).most_common(1)
+                    a = Counter( IndexType ).most_common( 1 )
                     domain = a[0][0]
 
-                    PType = np.delete(prob_test, [1, 3, 5, 7, 9, 10], 1)  # delete all artefact images,  only 5 region left
-                    PArte = np.delete(prob_test, [0, 2, 4, 6, 8], 1)       # all artefacts
+                    PType = np.delete( prob_test, [1, 3, 5, 7, 9, 10],
+                                       1 )  # delete all artefact images,  only 5 region left
+                    PArte = np.delete( prob_test, [0, 2, 4, 6, 8], 1 )  # all artefacts
                     PArte[:, [3, 4]] = PArte[:, [4, 3]]
-                    #PArte = np.reshape(PArte, (0, 1, 2, 3, 4, 5))
-                    PNew = np.concatenate((PType, PArte), axis=1)
-                    IndexArte = np.argmax(PNew, 1)
+                    # PArte = np.reshape(PArte, (0, 1, 2, 3, 4, 5))
+                    PNew = np.concatenate( (PType, PArte), axis=1 )
+                    IndexArte = np.argmax( PNew, 1 )
 
-                    IType = UnpatchType(IndexType, domain, patchSize, patchOverlap, dicom_size)
+                    IType = UnpatchType( IndexType, domain, patchSize, patchOverlap, dicom_size )
 
-                    IArte = UnpatchArte(IndexArte, patchSize, patchOverlap, dicom_size, 11)
-
+                    IArte = UnpatchArte( IndexArte, patchSize, patchOverlap, dicom_size, 11 )
 
                 if prob_test.shape[1] == 3:
-                    IndexType = np.argmax(prob_test, 1)
+                    IndexType = np.argmax( prob_test, 1 )
                     IndexType[IndexType == 0] = 1
                     IndexType[IndexType == 1] = 2
                     IndexType[IndexType == 2] = 3
 
-
-                    a = Counter(IndexType).most_common(1)
+                    a = Counter( IndexType ).most_common( 1 )
                     domain = a[0][0]
 
-                    PType = np.delete(prob_test, [1, 2], 1)  # delete all artefact images, only 5 region left
-                    PArte = np.delete(prob_test, [0], 1)
+                    PType = np.delete( prob_test, [1, 2], 1 )  # delete all artefact images, only 5 region left
+                    PArte = np.delete( prob_test, [0], 1 )
 
                     # PArte = np.reshape(PArte, (0, 1, 2, 3, 4, 5))
-                    PNew = np.concatenate((PType, PArte), axis=1)
-                    IndexArte = np.argmax(PNew, 1)
+                    PNew = np.concatenate( (PType, PArte), axis=1 )
+                    IndexArte = np.argmax( PNew, 1 )
 
-                    IType = UnpatchType(IndexType, domain, patchSize, patchOverlap, dicom_size)
+                    IType = UnpatchType( IndexType, domain, patchSize, patchOverlap, dicom_size )
 
-                    IArte = UnpatchArte(IndexArte, patchSize, patchOverlap, dicom_size, 3)
-
-
-
+                    IArte = UnpatchArte( IndexArte, patchSize, patchOverlap, dicom_size, 3 )
 
                 if prob_test.shape[1] == 8:
-                    IndexType = np.argmax(prob_test, 1)
+                    IndexType = np.argmax( prob_test, 1 )
                     IndexType[IndexType == 0] = 1
                     IndexType[(IndexType > 1) & (IndexType < 5)] = 2
                     IndexType[(IndexType > 4) & (IndexType < 8)] = 3
 
-                    a = Counter(IndexType).most_common(1)
+                    a = Counter( IndexType ).most_common( 1 )
                     domain = a[0][0]
 
-                    PType = np.delete(prob_test, [1, 3, 4, 6, 7], 1)  # delete all artefact images,  only 5 region left
-                    PArte = np.delete(prob_test, [0, 2, 5], 1)  # all artefacts
-                    #PArte[:, [3, 4]] = PArte[:, [4, 3]]
+                    PType = np.delete( prob_test, [1, 3, 4, 6, 7],
+                                       1 )  # delete all artefact images,  only 5 region left
+                    PArte = np.delete( prob_test, [0, 2, 5], 1 )  # all artefacts
+                    # PArte[:, [3, 4]] = PArte[:, [4, 3]]
                     # PArte = np.reshape(PArte, (0, 1, 2, 3, 4, 5))
-                    PNew = np.concatenate((PType, PArte), axis=1)
-                    IndexArte = np.argmax(PNew, 1)
+                    PNew = np.concatenate( (PType, PArte), axis=1 )
+                    IndexArte = np.argmax( PNew, 1 )
 
-                    IType = UnpatchType(IndexType, domain, patchSize, patchOverlap, dicom_size)
+                    IType = UnpatchType( IndexType, domain, patchSize, patchOverlap, dicom_size )
 
-                    IArte = UnpatchArte(IndexArte, patchSize, patchOverlap, dicom_size, 8)
+                    IArte = UnpatchArte( IndexArte, patchSize, patchOverlap, dicom_size, 8 )
 
-
-            ########################################################################################################
+                ########################################################################################################
 
                 self.unpatched_slices = {
                     'multiclass_probability_masks': multiclass_probability_masks,
@@ -1635,473 +1861,50 @@ class DeepLearningArtApp():
 
             # save prediction into .mat file
             modelSave = self.modelForPrediction + os.sep + 'model_predictions.mat'
-            print('saving Model:{}'.format(modelSave))
+            print( 'saving Model:{}'.format( modelSave ) )
             if not self.doUnpatching:
-                sio.savemat(modelSave, {'prob_pre': prediction['predictions'],
-                                        'Y_test': Y_test,
-                                        'score_test': prediction['score_test'],
-                                        'acc_test': prediction['acc_test'],
-                                        'classification_report': prediction['classification_report'],
-                                        'confusion_matrix': prediction['confusion_matrix']
-                                        })
+                sio.savemat( modelSave, {'prob_pre': prediction['predictions'],
+                                         'Y_test': Y_test,
+                                         'score_test': prediction['score_test'],
+                                         'acc_test': prediction['acc_test'],
+                                         'classification_report': prediction['classification_report'],
+                                         'confusion_matrix': prediction['confusion_matrix']
+                                         } )
             else:
-                sio.savemat(modelSave, {'prob_pre': prediction['predictions'],
-                                        'Y_test': Y_test,
-                                        'score_test': prediction['score_test'],
-                                        'acc_test': prediction['acc_test'],
-                                        'classification_report': prediction['classification_report'],
-                                        'confusion_matrix': prediction['confusion_matrix'],
-                                        'unpatched_slices': self.unpatched_slices
-                                        })
+                sio.savemat( modelSave, {'prob_pre': prediction['predictions'],
+                                         'Y_test': Y_test,
+                                         'score_test': prediction['score_test'],
+                                         'acc_test': prediction['acc_test'],
+                                         'classification_report': prediction['classification_report'],
+                                         'confusion_matrix': prediction['confusion_matrix'],
+                                         'unpatched_slices': self.unpatched_slices
+                                         } )
 
             # load training results
-            _, sPath = os.path.splitdrive(self.modelForPrediction)
-            sPath, sFilename = os.path.split(sPath)
-            sFilename, sExt = os.path.splitext(sFilename)
+            _, sPath = os.path.splitdrive( self.modelForPrediction )
+            sPath, sFilename = os.path.split( sPath )
+            sFilename, sExt = os.path.splitext( sFilename )
 
-            training_results = sio.loadmat(self.modelForPrediction + os.sep + sFilename + ".mat")
+            print( self.modelForPrediction + os.sep + sFilename + ".mat" )
+
+            training_results = sio.loadmat( self.modelForPrediction + os.sep + sFilename + ".mat" )
             self.acc_training = training_results['acc']
             self.acc_validation = training_results['val_acc']
             self.acc_test = training_results['acc_test']
 
         return True
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    ####################################################################################################################
-    ####  ArtGAN Stuff
-    ####################################################################################################################
-
-    def generateDataset_ArtGAN(self):
-
-        self.Art_test = []
-        self.Art_train = []
-        self.Ref_test = []
-        self.Ref_train = []
-
-        if self.patchingMode == DeepLearningArtApp.PATCHING_2D:
-            dAllPatches_art = np.zeros((self.patchSizeX_ArtGAN, self.patchSizeY_ArtGAN, 0))
-            dAllPatches_ref = np.zeros((self.patchSizeX_ArtGAN, self.patchSizeY_ArtGAN, 0))
-        elif self.patchingMode == DeepLearningArtApp.PATCHING_3D:
-            dAllPatches_art = np.zeros([self.patchSizeX_ArtGAN, self.patchSizeY_ArtGAN, self.patchSizeZ_ArtGAN, 0])
-            dAllPatches_ref = np.zeros([self.patchSizeX_ArtGAN, self.patchSizeY_ArtGAN, self.patchSizeZ_ArtGAN, 0])
-        else:
-            raise IOError("What's your plan, man? We do not know your patching mode...")
-
-        # stuff for storing
-        if self.storeMode_ArtGAN != DeepLearningArtApp.STORE_DISABLED:
-            # outPutFolder name:
-            outPutFolder = "ArtGAN_" + str(len(self.patients_ArtGAN)) + "Patients_P" + \
-                str(self.patchSizeX_ArtGAN) + "x" + str(self.patchSizeY_ArtGAN) + "_O" + str(self.patchOverlap_ArtGAN)
-
-            outputFolderPath = self.pathOutputPatchingGAN + os.sep + outPutFolder
-
-            if not os.path.exists(outputFolderPath):
-                os.makedirs(outputFolderPath)
-
-            # create dataset summary
-            self.createDatasetInfoSummary_ArtGAN(outPutFolder, outputFolderPath)
-
-            if self.storeMode_ArtGAN == DeepLearningArtApp.STORE_PATCH_BASED:
-                outPutFolderDataPathArts = outputFolderPath + os.sep + "data_arts"
-                outPutFolderDataPathRefs = outputFolderPath + os.sep + "data_refs"
-                if not os.path.exists(outPutFolderDataPathArts):
-                    os.makedirs(outPutFolderDataPathArts)
-                if not os.path.exists(outPutFolderDataPathRefs):
-                    os.makedirs(outPutFolderDataPathRefs)
-
-                labelDict = {}
-
-        # for storing patch based
-        iPatchToDisk = 0
-
-        for patient in self.patients_ArtGAN:
-            for dataset in self.datasets_ArtGAN_Pairs.keys():
-                # for artefact dataset
-                currentArtDataDir = self.pathDatabase + os.sep + patient + os.sep + self.modelSubDir + os.sep + dataset
-                # for ref dataset
-                currentRefDataDir = self.pathDatabase + os.sep + patient + os.sep + self.modelSubDir +\
-                                    os.sep + self.datasets_ArtGAN_Pairs[dataset]
-
-                if os.path.exists(currentArtDataDir) and os.path.exists(currentRefDataDir):
-                    # get list with all paths of dicoms for current patient and current dataset
-                    fileNamesArt = tf.gfile.ListDirectory(currentArtDataDir)
-                    fileNamesRef = tf.gfile.ListDirectory(currentRefDataDir)
-
-                    fileNamesArt = [os.path.join(currentArtDataDir, f) for f in fileNamesArt]
-                    fileNamesRef = [os.path.join(currentRefDataDir, f) for f in fileNamesRef]
-
-                    # read DICOMS
-                    dicomDatasetArt = [dicom.read_file(f) for f in fileNamesArt]
-                    dicomDatasetRef = [dicom.read_file(f) for f in fileNamesRef]
-
-                    # Combine DICOM Slices to a single 3D image (voxel)
-                    try:
-                        voxel_ndarray_art, ijk_to_xyz_art = dicom_np.combine_slices(dicomDatasetArt)
-                        voxel_ndarray_art = voxel_ndarray_art.astype(float)
-                        voxel_ndarray_art = np.swapaxes(voxel_ndarray_art, 0, 1)
-                        voxel_ndarray_ref, ijk_to_xyz_ref = dicom_np.combine_slices(dicomDatasetRef)
-                        voxel_ndarray_ref = voxel_ndarray_ref.astype(float)
-                        voxel_ndarray_ref = np.swapaxes(voxel_ndarray_ref, 0, 1)
-                    except dicom_np.DicomImportException as e:
-                        # invalid DICOM data
-                        raise
-
-                    # normalization of DICOM voxels
-                    rangeNorm = [0, 1]
-                    norm_voxel_ndarray_art = (voxel_ndarray_art - np.min(voxel_ndarray_art)) \
-                                             * (rangeNorm[1] - rangeNorm[0]) \
-                                             / (np.max(voxel_ndarray_art) - np.min(voxel_ndarray_art))
-                    norm_voxel_ndarray_ref = (voxel_ndarray_ref - np.min(voxel_ndarray_ref)) \
-                                             * (rangeNorm[1] - rangeNorm[0]) \
-                                             / (np.max(voxel_ndarray_ref) - np.min(voxel_ndarray_ref))
-
-                    # 2D patching
-                    #datasetLabel_art = DeepLearningArtApp.datasets[dataset].getDatasetLabel()
-                    #datasetLabel_ref = DeepLearningArtApp.datasets[self.datasets_ArtGAN_Pairs[dataset]].getDatasetLabel()
-
-                    # compute 2D patch labeling patching
-                    dPatches_art, dLabels_art = fRigidPatching_patchLabeling(norm_voxel_ndarray_art,
-                                                                             [self.patchSizeX_ArtGAN, self.patchSizeY_ArtGAN],
-                                                                             self.patchOverlap_ArtGAN,
-                                                                             ratio_labeling=1)
-                    dPatches_ref, dLabels_ref = fRigidPatching_patchLabeling(norm_voxel_ndarray_ref,
-                                                                             [self.patchSizeX_ArtGAN, self.patchSizeY_ArtGAN],
-                                                                             self.patchOverlap_ArtGAN,
-                                                                             ratio_labeling=1)
-
-                    #dLabels = dLabels * datasetLabel
-
-                    # convert to float32
-                    dPatches_art = np.asarray(dPatches_art, dtype=np.float32)
-                    dPatches_ref = np.asarray(dPatches_ref, dtype=np.float32)
-
-                if self.storeMode_ArtGAN == DeepLearningArtApp.STORE_PATCH_BASED:
-                    for i in range(0, dPatches_art.shape[2]):
-                        # artifact slice
-                        patchSlice = np.asarray(dPatches_art[:, :, i], dtype=np.float32)
-                        np.save((outPutFolderDataPathArts + os.sep + "Art" + str(iPatchToDisk) + ".npy"), patchSlice,
-                                allow_pickle=False)
-
-                        # reference slice
-                        patchSlice = np.asarray(dPatches_ref[:, :, i], dtype=np.float32)
-                        np.save((outPutFolderDataPathRefs + os.sep + "Ref" + str(iPatchToDisk) + ".npy"), patchSlice,
-                                allow_pickle=False)
-                        iPatchToDisk += 1
-
-                else:
-                    # concatenate all patches in one array
-                    dAllPatches_art = np.concatenate((dAllPatches_art, dPatches_art), axis=2)
-                    dAllPatches_ref = np.concatenate((dAllPatches_ref, dPatches_ref), axis=2)
-
-        if self.storeMode_ArtGAN != DeepLearningArtApp.STORE_PATCH_BASED:
-            # dataset splitting
-            [self.Art_train], [self.Ref_train], _, _, [self.Art_test], [self.Ref_test] \
-                = fSplitDataset(dAllPatches_art,
-                                dAllPatches_ref,
-                                allPats=self.patients_ArtGAN,
-                                sSplitting=self.splittingMode_ArtGAN,
-                                patchSize=[self.patchSizeX_ArtGAN, self.patchSizeY_ArtGAN],
-                                patchOverlap=self.patchOverlap_ArtGAN,
-                                testTrainingDatasetRatio=self.trainTestDatasetRatio_ArtGAN,
-                                validationTrainRatio=self.trainValidationRatio_ArtGAN,
-                                outPutPath=self.pathOutputPatchingGAN,
-                                nfolds=self.numFolds)
-
-            # H5py store mode
-            if self.storeMode_ArtGAN == DeepLearningArtApp.STORE_HDF5:
-                # store datasets with h5py
-                pathOutput = outputFolderPath + os.sep + "Pats" + str(len(self.patients_ArtGAN)) + '_' + str(self.patchSizeX_ArtGAN) + \
-                    'x' + str(self.patchSizeY_ArtGAN) + '_O' + str(self.patchOverlap_ArtGAN) + '.hdf5'
-
-                with h5py.File(pathOutput, 'w') as hf:
-                    hf.create_dataset('Art_train', data=self.Art_train)
-                    #hf.create_dataset('X_validation', data=self.X_validation)
-                    hf.create_dataset('Art_test', data=self.Art_test)
-                    hf.create_dataset('Ref_train', data=self.Ref_train)
-                    #hf.create_dataset('Y_validation', data=self.Y_validation)
-                    hf.create_dataset('Ref_test', data=self.Ref_test)
-
-    def performTraining_ArtGAN(self):
-        artGAN.artGAN_main()
-
-    def getOutputPathPatchingGAN(self):
-        return self.pathOutputPatchingGAN
-
-    def setOutputPathPatchingGAN(self, path):
-        self.pathOutputPatchingGAN = path
-
-    def getPatientsArtGAN(self):
-        return self.patients_ArtGAN
-
-    def setPatientsArtGAN(self, d):
-        self.patients_ArtGAN = d
-
-    def getDatasetArtGAN(self):
-        return self.datasets_ArtGAN
-
-    def setDatasetArtGAN(self, d):
-        self.datasets_ArtGAN = d
-
-    def setDatasets_ArtGAN_Pairs(self, pairs):
-        self.datasets_ArtGAN_Pairs = pairs
-
-    def getDatasets_ArtGAN_Pairs(self):
-        return self.datasets_ArtGAN_Pairs
-
-    def fPreprocessDataCorrection(self, trainingMethod, cfg, patchSize, dbinfo):
-        """
-        Perform patching to reference and artifact images according to given patch size.
-        @param cfg: the configuration file loaded from config/param.yml
-        @param dbinfo: database related info
-        @return: patches from reference and artifact images and an array which stores the corresponding patient index
-        """
-        train_ref = []
-        test_ref = []
-        train_art = []
-        test_art = []
-
-        sTrainingMethod = trainingMethod
-
-        scpatchSize = patchSize
-        if sTrainingMethod != "scalingPrior":
-            lScaleFactor = [1]
-        # Else perform scaling:
-        #   images will be split into pathces with size scpatchSize and then scaled to patchSize
-        for iscalefactor in self.lscaleFactor:
-            lDatasets = cfg['selectedDatabase']['dataref'] + cfg['selectedDatabase']['dataart']
-            scpatchSize = [int(psi / iscalefactor) for psi in patchSize]
-            if len(patchSize) == 3:
-                dRefPatches = np.empty((0, scpatchSize[0], scpatchSize[1], scpatchSize[2]))
-                dArtPatches = np.empty((0, scpatchSize[0], scpatchSize[1], scpatchSize[2]))
-            else:
-                dRefPatches = np.empty((0, scpatchSize[0], scpatchSize[1]))
-                dArtPatches = np.empty((0, scpatchSize[0], scpatchSize[1]))
-
-            dRefPats = np.empty((0, 1))
-            dArtPats = np.empty((0, 1))
-
-            for ipat, pat in enumerate(dbinfo.lPats):
-                if os.path.exists(dbinfo.sPathIn + os.sep + pat + os.sep + dbinfo.sSubDirs[1]):
-                    for iseq, seq in enumerate(lDatasets):
-                        # patches and labels of reference/artifact
-                        tmpPatches, tmpLabels = fPreprocessData(
-                            os.path.join(dbinfo.sPathIn, pat, dbinfo.sSubDirs[1], seq),
-                            patchSize, cfg['patchOverlap'], 1, 'volume')
-
-                        if iseq == 0:
-                            dRefPatches = np.concatenate((dRefPatches, tmpPatches), axis=0)
-                            dRefPats = np.concatenate(
-                                (dRefPats, ipat * np.ones((tmpPatches.shape[0], 1), dtype=np.int)), axis=0)
-                        elif iseq == 1:
-                            dArtPatches = np.concatenate((dArtPatches, tmpPatches), axis=0)
-                            dArtPats = np.concatenate(
-                                (dArtPats, ipat * np.ones((tmpPatches.shape[0], 1), dtype=np.int)), axis=0)
-                else:
-                    pass
-
-        assert (dRefPatches.shape == dArtPatches.shape and dRefPats.shape == dArtPats.shape)
-
-        # perform splitting
-        print('Start splitting')
-        train_ref_sp, test_ref_sp, train_art_sp, test_art_sp = ttsplit.fSplitDatasetCorrection(cfg['sSplitting'],
-                                                                                               dRefPatches, dArtPatches,
-                                                                                               dRefPats,
-                                                                                               cfg['dSplitval'],
-                                                                                               cfg['nFolds'])
-        print('Start scaling')
-        # perform scaling: sc for scale
-        train_ref_sc, test_ref_sc = scaling.fscaling(train_ref_sp, test_ref_sp, scpatchSize, iscalefactor)
-        train_art_sc, test_art_sc = scaling.fscaling(train_art_sp, test_art_sp, scpatchSize, iscalefactor)
-
-        if len(train_ref) == 0:
-            train_ref = train_ref_sc
-            test_ref = test_ref_sc
-            train_art = train_art_sc
-            test_art = test_art_sc
-        else:
-            train_ref = np.concatenate((train_ref, train_ref_sc), axis=1)
-            test_ref = np.concatenate((test_ref, test_ref_sc), axis=1)
-            train_art = np.concatenate((train_art, train_art_sc), axis=1)
-            test_art = np.concatenate((test_art, test_art_sc), axis=1)
-
-        return train_ref, test_ref, train_art, test_art
-
-    def setStoreMode_ArtGAN(self, mode):
-        if mode == 0:
-            self.storeMode_ArtGAN = DeepLearningArtApp.STORE_DISABLED
-        elif mode == 1:
-            self.storeMode_ArtGAN = DeepLearningArtApp.STORE_HDF5
-        elif mode == 2:
-            self.storeMode_ArtGAN = DeepLearningArtApp.STORE_PATCH_BASED
-        else:
-            raise ValueError('Unknown store mode!!!')
-
-    def getStoreMode_ArtGAN(self):
-        return self.storeMode_ArtGAN
-
-    def getPatchSizeX_ArtGAN(self):
-        return self.patchSizeX_ArtGAN
-
-    def getPatchSizeY_ArtGAN(self):
-        return self.patchSizeY_ArtGAN
-
-    def setPatchSizeX_ArtGAN(self, x):
-        self.patchSizeX_ArtGAN = x
-
-    def setPatchSizeY_ArtGAN(self, y):
-        self.patchSizeY_ArtGAN = y
-
-    def getPatchSizeZ_ArtGAN(self):
-        return self.patchSizeZ_ArtGAN
-
-    def setPatchSizeZ_ArtGAN(self, z):
-        self.patchSizeZ_ArtGAN = z
-
-    def getPatchOverlap_ArtGAN(self):
-        return self.patchOverlap_ArtGAN
-
-    def setPatchOverlap_ArtGAN(self, o):
-        self.patchOverlap_ArtGAN = o
-
-    def createDatasetInfoSummary_ArtGAN(self, name, outputFolderPath):
-        '''
-        creates a json info summary of the patched dataset
-        :param outputFolderPath:
-        :return:
-        '''
-        dataDict = {}
-        dataDict['Name'] = name
-        dataDict['Date'] = datetime.datetime.today().strftime('%Y-%m-%d')
-        dataDict['Patients'] = self.patients_ArtGAN
-        dataDict['Datasets'] = self.datasets_ArtGAN_Pairs
-        dataDict['PatchSizeX'] = self.patchSizeX_ArtGAN
-        dataDict['PatchSizeY'] = self.patchSizeY_ArtGAN
-        dataDict['PatchOverlap'] = self.patchOverlap_ArtGAN
-        dataDict['SplittingMode'] = self.splittingMode_ArtGAN
-        dataDict['StoreMode'] = self.storeMode_ArtGAN
-
-        with open((outputFolderPath+os.sep+'dataset_info.json'), 'w') as fp:
-            json.dump(dataDict, fp, indent=4)
-
-    def getArtRefPairLength(self):
-        return self.Art_train.shape[0]
-
-    def getArtRefPair(self, num):
-        art = self.Art_train[num]
-        ref = self.Ref_train[num]
-
-        return art, ref
-
-    def loadDatasetArtGAN(self, pathToDataset):
-        '''
-        Method loads an existing dataset out of hd5f files or handles the patch based datasets
-        :param pathToDataset: path to dataset
-        :return: boolean if loading was successful, and name of loaded dataset
-        '''
-        retbool = False
-        datasetName = ''
-        #check for data info summary in json file
-        try:
-            with open(pathToDataset + os.sep + "dataset_info.json", 'r') as fp:
-                dataset_info = json.load(fp)
-
-            # hd5f or patch based?
-            if dataset_info['StoreMode'] == DeepLearningArtApp.STORE_HDF5:
-                # loading hdf5
-                datasetName = dataset_info['Name']
-                self.patchSizeX = int(dataset_info['PatchSizeX'])
-                self.patchSizeY = int(dataset_info['PatchSizeY'])
-                self.patchSizeZ = int(dataset_info['PatchSizeZ'])
-                self.patchOverlapp = float(dataset_info['PatchOverlap'])
-
-                # loading hdf5 dataset
-                try:
-                    with h5py.File(pathToDataset + os.sep + "datasets.hdf5", 'r') as hf:
-                        self.X_train = hf['X_train'][:]
-                        self.X_validation = hf['X_validation'][:]
-                        self.X_test = hf['X_test'][:]
-                        self.Y_train = hf['Y_train'][:]
-                        self.Y_validation = hf['Y_validation'][:]
-                        self.Y_test = hf['Y_test'][:]
-
-                    retbool = True
-                except:
-                    raise TypeError("Can't read HDF5 dataset!")
-
-            elif dataset_info['StoreMode'] == DeepLearningArtApp.STORE_PATCH_BASED:
-                #loading patchbased stuff
-                datasetName = dataset_info['Name']
-
-                print("still in progrss")
-            else:
-                raise NameError("No such store Mode known!")
-
-        except:
-            raise FileNotFoundError("Error: Something went wrong at trying to load the dataset!!!")
-
-        return retbool, datasetName
-
-
-    ####################################################################################################################
-    ####################################################################################################################
-
-
-
     @staticmethod
-    def getOSPathes(operatingSystem=0):
-        '''
-            Method defines the location of the datasets whether OpenSuse or Windows is used.
-            You can define within the method the specific pathes of the Dicom data
-            :param operatingSystem: 0 if windows pc is used. operatingSystemtem=1 if linux is used.
-            :return
-        '''
-        if operatingSystem==0:
-            # my windows PC
-            pathDatabase = "D:" + os.sep + "med_data" + os.sep + "MRPhysics" + os.sep + "newProtocol"
+    def getOSPathes():
 
-            pathOutputPatching = "D:" + os.sep + "med_data" + os.sep + "MRPhysics" + os.sep + "DeepLearningArt_Output" + \
-                os.sep + "Datasets"
+        pathDatabase = PATH_OUT + os.sep + "MRPhysics" + os.sep + "newProtocol"
 
-            markingsPath = "D:" + os.sep + "med_data" + os.sep + "MRPhysics" + os.sep + "Markings"
+        pathOutputPatching = PATH_OUT + os.sep + "MRPhysics" + os.sep + "DeepLearningArt_Output" + \
+                             os.sep + "Datasets"
 
-            learningOutputPath = "D:" + os.sep + "med_data" + os.sep + "MRPhysics" + os.sep + "DeepLearningArt_Output" + \
-                                      os.sep + "Output_Learning"
+        markingsPath = PATH_OUT + os.sep + "MRPhysics" + os.sep + "Paper_Markings"
 
-            pathOutputPatchingGAN = "D:" + os.sep + "med_data" + os.sep + "MRPhysics" + os.sep + "DeepLearningArt_GAN"
+        learningOutputPath = LEARNING_OUT + os.sep + "MRPhysics" + os.sep + "output" + \
+                             os.sep + "Output_Learning"
 
-        elif operatingSystem==1:
-            pathDatabase = "/med_data/ImageSimilarity/Databases/MRPhysics/newProtocol"
-            pathOutputPatching = "/no_backup/d1237/DeepLearningArt_Output/Datasets"
-            markingsPath = "/no_backup/d1237/Markings/"
-            learningOutputPath = "/no_backup/d1237/DeepLearningArt_Output/Output_Learning"
-            pathOutputPatchingGAN = "/no_backup/d1237/DeepLearningArt_GAN/"
-
-        return pathDatabase, pathOutputPatching, markingsPath, learningOutputPath, pathOutputPatchingGAN
+        return pathDatabase, pathOutputPatching, markingsPath, learningOutputPath
