@@ -30,7 +30,7 @@ from DLart.Constants_DLart import *
 class DeepLearningArtApp(QWidget):
     network_interface_update = pyqtSignal()
     _network_interface_update = pyqtSignal()  # used for activate network training
-    datasetscsv = pandas.read_csv('config' + os.sep + DATASETS + '.csv')
+    datasetscsv = pandas.read_csv('config' + os.sep + 'database' + os.sep + DATASETS + '.csv')
     datasets = {}
     for i in range(pandas.DataFrame.count(datasetscsv)['pathdata']):
         datasets[datasetscsv['pathdata'][i]] = Dataset(datasetscsv['pathdata'][i], datasetscsv['pathlabel'][i],
@@ -193,7 +193,7 @@ class DeepLearningArtApp(QWidget):
         self.datasetOutputPath = self.pathOutputPatching
         self.modelPathPrediction = self.learningOutputPath
         self.modelPrediction = "FCN 3D-VResFCN-Unsampling"
-        self.modelPresictionSource = self.deepNeuralNetworks[self.neuralNetworkModel].replace(".", "/") + '.py'
+        self.modelPredictionSource = self.deepNeuralNetworks[self.neuralNetworkModel].replace(".", "/") + '.py'
         self.doUnpatching = False
 
         self.usingSegmentationMasksForPrediction = False
@@ -284,7 +284,7 @@ class DeepLearningArtApp(QWidget):
                 ]},
                 {'name': 'dataset output for prediction', 'type': 'str', 'value': self.datasetForPrediction},
                 {'name': 'network output for prediction', 'type': 'group', 'children': [
-                    {'name': 'network source for prediction', 'type': 'str', 'value': self.modelPresictionSource},
+                    {'name': 'network source for prediction', 'type': 'str', 'value': self.modelPredictionSource},
                     {'name': 'network output for prediction', 'type': 'str', 'value': self.modelPathPrediction},
                 ]},
             ]},
@@ -371,7 +371,7 @@ class DeepLearningArtApp(QWidget):
                 ]},
                 {'name': 'dataset output for prediction', 'type': 'str', 'value': self.datasetForPrediction},
                 {'name': 'network output for prediction', 'type': 'group', 'children': [
-                    {'name': 'network source for prediction', 'type': 'str', 'value': self.modelPresictionSource},
+                    {'name': 'network source for prediction', 'type': 'str', 'value': self.modelPredictionSource},
                     {'name': 'network output for prediction', 'type': 'str', 'value': self.modelPathPrediction},
                 ]},
             ]},
@@ -2462,7 +2462,7 @@ class DeepLearningArtApp(QWidget):
             cnn_info = json.load(fp)
 
         self.modelPrediction = cnn_info['Name']
-        self.modelPathPrediction = self.deepNeuralNetworks[self.modelPrediction]
+        self.modelPredictionSource = self.deepNeuralNetworks[self.modelPrediction].replace(".", "/") + '.py'
         self.batchSizePrediction = int(cnn_info['BatchSize'])
         self.usingArtifactsPrediction = cnn_info['Artifacts']
         self.usingBodyRegionsPrediction = cnn_info['BodyRegions']
