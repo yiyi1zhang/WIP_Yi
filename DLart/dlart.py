@@ -50,6 +50,7 @@ class DeepLearningArtApp(QWidget):
         # GPU id
         self.gpu_id = 0
         self.gpu_prediction_id = 0
+        self.result_WorkSpace = None
 
         # attributes for paths and database
         self.selectedPatients = ''
